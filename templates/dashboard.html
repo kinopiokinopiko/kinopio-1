@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}資産ダッシュボード{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .asset-grid { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+        gap: 20px; 
+        margin: 20px 0; 
+    }
+    .asset-card { 
+        background: white; 
+        padding: 20px; 
+        border-radius: 8px; 
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+    }
+    .asset-card h3 { 
+        margin: 0 0 10px 0; 
+        color: #333; 
+    }
+    .asset-value { 
+        font-size: 24px; 
+        font-weight: bold; 
+        color: #007bff; 
+    }
+    .total-card { 
+        background: #28a745; 
+        color: white; 
+        grid-column: 1 / -1; 
+        text-align: center; 
+    }
+    .total-card .asset-value {
+        color: white;
+    }
+    .rate-info { 
+        color: #666; 
+        font-size: 14px; 
+        margin: 10px 0; 
+    }
+    .profit-info {
+        margin-top: 8px;
+        font-size: 14px;
+    }
+    .profit {
+        color: #28a745;
+        font-weight: bold;
+    }
+    .loss {
+        color: #dc3545;
+        font-weight: bold;
+    }
+    .total-profit {
+        font-size: 16px;
+        margin-top: 10px;
+    }
+    .total-profit .profit,
+    .total-profit .loss {
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="header">
+    <h1>資産ダッシュボード
+        <span class="user-info">
+            {{ username }} さん
+            <a href="{{ url_for('logout') }}" class="nav-links logout-btn" style="margin: 0 0 0 10px;">ログアウト</a>
+        </span>
+    </h1>
+    <div class="rate-info">USD/JPY: {{ "{:.2f}".format(usd_jpy) }} 円</div>
+    <form method="post" action="{{ url_for('update_all_prices') }}" style="display: inline;">
+        <button type="submit" class="update-btn" onclick="return confirm('全ての価格を更新しますか？時間がかかる場合があります。')">全価格更新</button>
+    </form>
+</div>
+
+<div class="nav-links">
+    <a href="{{ url_for('manage_assets', asset_type='jp_stock') }}">日本株</a>
+    <a href="{{ url_for('manage_assets', asset_type='us_stock') }}">米国株</a>
+    <a href="{{ url_for('manage_assets', asset_type='cash') }}">現金</a>
+    <a href="{{ url_for('manage_assets', asset_type='gold') }}">金</a>
+</div>
+
+<div class="asset-grid">
+    <div class="asset-card">
+        <h3>日本株</h3>
+        <div class="asset-value">{{ "{:,.0f}".format(jp_total) }} 円</div>
+        <div>{{ jp_stocks|length }} 銘柄</div>
+        <div class="profit-info">
+            {% if jp_profit >= 0 %}
+                <span class="profit">+{{ "{:,.0f}".format(jp_profit) }} 円</span>
+            {% else %}
+                <span class="loss">{{ "{:,.0f}".format(jp_profit) }} 円</span>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="asset-card">
+        <h3>米国株</h3>
+        <div class="asset-value">{{ "{:,.0f}".format(us_total_jpy) }} 円</div>
+        <div>${{ "{:,.2f}".format(us_total_usd) }} ({{ us_stocks|length }} 銘柄)</div>
+        <div class="profit-info">
+            {% if us_profit_jpy >= 0 %}
+                <span class="profit">+{{ "{:,.0f}".format(us_profit_jpy) }} 円</span>
+            {% else %}
+                <span class="loss">{{ "{:,.0f}".format(us_profit_jpy) }} 円</span>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="asset-card">
+        <h3>現金</h3>
+        <div class="asset-value">{{ "{:,.0f}".format(cash_total) }} 円</div>
+        <div>{{ cash_items|length }} 項目</div>
+    </div>
+    
+    <div class="asset-card">
+        <h3>金 (Gold)</h3>
+        <div class="asset-value">{{ "{:,.0f}".format(gold_total) }} 円</div>
+        <div>{{ gold_items|length }} 項目</div>
+        <div class="profit-info">
+            {% if gold_profit >= 0 %}
+                <span class="profit">+{{ "{:,.0f}".format(gold_profit) }} 円</span>
+            {% else %}
+                <span class="loss">{{ "{:,.0f}".format(gold_profit) }} 円</span>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="asset-card total-card">
+        <h3>総資産</h3>
+        <div class="asset-value">{{ "{:,.0f}".format(total_assets) }} 円</div>
+        <div class="profit-info total-profit">
+            {% if total_profit >= 0 %}
+                <span class="profit">+{{ "{:,.0f}".format(total_profit) }} 円</span>
+            {% else %}
+                <span class="loss">{{ "{:,.0f}".format(total_profit) }} 円</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

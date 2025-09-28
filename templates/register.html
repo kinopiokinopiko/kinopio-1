@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block title %}新規登録 - 資産管理{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .register-container { 
+        max-width: 400px; 
+        margin: 50px auto; 
+        background: white; 
+        padding: 30px; 
+        border-radius: 8px; 
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+    }
+    .form-group {
+        margin-bottom: 20px;
+    }
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+    .form-group input[type="text"], 
+    .form-group input[type="password"] { 
+        width: 100%; 
+        padding: 12px; 
+        border: 1px solid #ddd; 
+        border-radius: 4px; 
+        box-sizing: border-box;
+        font-size: 14px;
+    }
+    .form-group input:focus {
+        outline: none;
+        border-color: #007bff;
+    }
+    .form-group button { 
+        width: 100%; 
+        padding: 12px; 
+        background: #28a745; 
+        color: white; 
+        border: none; 
+        border-radius: 4px; 
+        cursor: pointer; 
+        font-size: 16px; 
+        font-weight: bold;
+    }
+    .form-group button:hover { 
+        background: #218838; 
+    }
+    .password-requirements {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 15px;
+        margin-bottom: 20px;
+        font-size: 14px;
+    }
+    .password-requirements h4 {
+        margin-top: 0;
+        margin-bottom: 10px;
+        color: #495057;
+    }
+    .password-requirements ul {
+        margin: 0;
+        padding-left: 20px;
+    }
+    .password-requirements li {
+        margin-bottom: 5px;
+        color: #6c757d;
+    }
+    .login-link {
+        text-align: center;
+        margin-top: 20px;
+        padding-top: 15px;
+        border-top: 1px solid #eee;
+    }
+    .login-link a {
+        color: #007bff;
+        text-decoration: none;
+    }
+    .login-link a:hover {
+        text-decoration: underline;
+    }
+    .password-match {
+        color: #28a745;
+        font-size: 12px;
+    }
+    .password-mismatch {
+        color: #dc3545;
+        font-size: 12px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="register-container">
+    <h1>新規アカウント登録</h1>
+    
+    <div class="password-requirements">
+        <h4>登録要件</h4>
+        <ul>
+            <li>ユーザー名は3文字以上</li>
+            <li>パスワードは6文字以上</li>
+            <li>英数字、記号が使用可能</li>
+        </ul>
+    </div>
+    
+    <form method="post" id="registerForm">
+        <div class="form-group">
+            <label for="username">ユーザー名 *</label>
+            <input type="text" id="username" name="username" required minlength="3">
+        </div>
+        
+        <div class="form-group">
+            <label for="password">パスワード *</label>
+            <input type="password" id="password" name="password" required minlength="6">
+        </div>
+        
+        <div class="form-group">
+            <label for="confirm_password">パスワード確認 *</label>
+            <input type="password" id="confirm_password" name="confirm_password" required minlength="6">
+            <div id="passwordMatch"></div>
+        </div>
+        
+        <div class="form-group">
+            <button type="submit">アカウント作成</button>
+        </div>
+    </form>
+    
+    <div class="login-link">
+        <p>既にアカウントをお持ちの方は<br><a href="{{ url_for('login') }}">ログインはこちら</a></p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const password = document.getElementById('password');
+    const confirmPassword = document.getElementById('confirm_password');
+    const passwordMatch = document.getElementById('passwordMatch');
+    const form = document.getElementById('registerForm');
+    
+    function checkPasswordMatch() {
+        if (confirmPassword.value === '') {
+            passwordMatch.textContent = '';
+            return;
+        }
+        
+        if (password.value === confirmPassword.value) {
+            passwordMatch.textContent = 'パスワードが一致しています';
+            passwordMatch.className = 'password-match';
+        } else {
+            passwordMatch.textContent = 'パスワードが一致しません';
+            passwordMatch.className = 'password-mismatch';
+        }
+    }
+    
+    password.addEventListener('input', checkPasswordMatch);
+    confirmPassword.addEventListener('input', checkPasswordMatch);
+    
+    form.addEventListener('submit', function(e) {
+        if (password.value !== confirmPassword.value) {
+            e.preventDefault();
+            alert('パスワードが一致しません');
+        }
+        
+        if (password.value.length < 6) {
+            e.preventDefault();
+            alert('パスワードは6文字以上で入力してください');
+        }
+        
+        if (document.getElementById('username').value.length < 3) {
+            e.preventDefault();
+            alert('ユーザー名は3文字以上で入力してください');
+        }
+    });
+});
+</script>
+{% endblock %}

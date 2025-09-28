@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block title %}{{ info.title }}管理{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .profit {
+        color: #28a745;
+        font-weight: bold;
+    }
+    .loss {
+        color: #dc3545;
+        font-weight: bold;
+    }
+    .form-field {
+        margin-right: 10px;
+    }
+    .form-field input {
+        width: 120px;
+    }
+    .form-field.wide input {
+        width: 150px;
+    }
+    .form-field label {
+        font-size: 12px;
+        margin-bottom: 2px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="header">
+    <a href="{{ url_for('dashboard') }}" class="back-link">← ダッシュボードに戻る</a>
+    <h1>{{ info.title }}管理</h1>
+</div>
+
+<div class="form-section">
+    <h3>{{ info.title }}を追加/更新</h3>
+    <form method="post" action="{{ url_for('add_asset') }}">
+        <input type="hidden" name="asset_type" value="{{ asset_type }}">
+        <div class="form-row">
+            <div class="form-field">
+                <label>{{ info.symbol_label }}</label>
+                <input type="text" name="symbol" placeholder="{{ info.symbol_label }}" required>
+            </div>
+            {% if asset_type not in ['cash'] %}
+            <div class="form-field wide">
+                <label>名前（オプション）</label>
+                <input type="text" name="name" placeholder="名前（オプション）">
+            </div>
+            {% endif %}
+            <div class="form-field">
+                <label>{{ info.quantity_label }}</label>
+                <input type="number" name="quantity" step="0.01" placeholder="{{ info.quantity_label }}" required>
+            </div>
+            {% if asset_type not in ['cash'] %}
+            <div class="form-field">
+                <label>平均取得単価</label>
+                <input type="number" name="avg_cost" step="0.01" placeholder="平均取得単価" required>
+            </div>
+            <button type="button" onclick="updatePrices()" class="update-btn">価格更新</button>
+            {% endif %}
+            <button type="submit">追加/更新</button>
+        </div>
+    </form>
+</div>
+
+{% if assets %}
+<table>
+    <thead>
+        <tr>
+            <th>{{ info.symbol_label }}</th>
+            {% if asset_type not in ['cash'] %}<th>名前</th>{% endif %}
+            <th class="text-right">{{ info.quantity_label }}</th>
+            {% if asset_type not in ['cash'] %}
+            <th class="text-right">平均取得単価</th>
+            <th class="text-right">現在価格</th>
+            <th class="text-right">評価額</th>
+            <th class="text-right">損益</th>
+            {% endif %}
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for asset in assets %}
+        <tr>
+            <td>{{ asset.symbol }}</td>
+            {% if asset_type not in ['cash'] %}<td>{{ asset.name or '-' }}</td>{% endif %}
+            <td class="text-right">{{ "{:,.2f}".format(asset.quantity) }}</td>
+            {% if asset_type not in ['cash'] %}
+            <td class="text-right">
+                {% if asset_type == 'us_stock' %}
+                    ${{ "{:,.2f}".format(asset.avg_cost) }}
+                {% else %}
+                    {{ "{:,.0f}".format(asset.avg_cost) }} 円
+                {% endif %}
+            </td>
+            <td class="text-right">
+                {% if asset_type == 'us_stock' %}
+                    ${{ "{:,.2f}".format(asset.price) }}
+                {% else %}
+                    {{ "{:,.0f}".format(asset.price) }} 円
+                {% endif %}
+            </td>
+            <td class="text-right">
+                {% if asset_type == 'us_stock' %}
+                    ${{ "{:,.2f}".format(asset.quantity * asset.price) }}
+                {% else %}
+                    {{ "{:,.0f}".format(asset.quantity * asset.price) }} 円
+                {% endif %}
+            </td>
+            <td class="text-right">
+                {% set current_value = asset.quantity * asset.price %}
+                {% set cost_value = asset.quantity * asset.avg_cost %}
+                {% set profit = current_value - cost_value %}
+                {% if profit >= 0 %}
+                    <span class="profit">
+                        {% if asset_type == 'us_stock' %}
+                            +${{ "{:,.2f}".format(profit) }}
+                        {% else %}
+                            +{{ "{:,.0f}".format(profit) }} 円
+                        {% endif %}
+                    </span>
+                {% else %}
+                    <span class="loss">
+                        {% if asset_type == 'us_stock' %}
+                            ${{ "{:,.2f}".format(profit) }}
+                        {% else %}
+                            {{ "{:,.0f}".format(profit) }} 円
+                        {% endif %}
+                    </span>
+                {% endif %}
+            </td>
+            {% endif %}
+            <td>
+                <a href="{{ url_for('edit_asset', asset_id=asset.id) }}" class="update-btn" style="text-decoration: none; padding: 4px 8px; font-size: 12px; margin-right: 5px;">編集</a>
+                <form method="post" action="{{ url_for('delete_asset') }}" style="display: inline;">
+                    <input type="hidden" name="asset_id" value="{{ asset.id }}">
+                    <button type="submit" class="delete-btn" onclick="return confirm('削除しますか？')">削除</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="form-section">
+    <p>まだ{{ info.title }}が登録されていません。上のフォームから追加してください。</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updatePrices() {
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '更新中...';
+    
+    if(confirm('価格を最新情報で更新しますか？時間がかかる場合があります。')) {
+        fetch('{{ url_for("update_prices") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'asset_type={{ asset_type }}'
+        }).then(response => {
+            if(response.ok) {
+                location.reload();
+            } else {
+                alert('価格更新に失敗しました');
+                button.disabled = false;
+                button.innerHTML = originalText;
+            }
+        }).catch(error => {
+            alert('エラーが発生しました: ' + error.message);
+            button.disabled = false;
+            button.innerHTML = originalText;
+        });
+    } else {
+        button.disabled = false;
+        button.innerHTML = originalText;
+    }
+}
+</script>
+{% endblock %}

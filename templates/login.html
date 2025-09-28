@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}ログイン - 資産管理{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .login-container { 
+        max-width: 400px; 
+        margin: 50px auto; 
+        background: white; 
+        padding: 30px; 
+        border-radius: 8px; 
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+    }
+    .form-group input[type="text"], 
+    .form-group input[type="password"] { 
+        width: 100%; 
+        padding: 12px; 
+        border: 1px solid #ddd; 
+        border-radius: 4px; 
+        box-sizing: border-box; 
+    }
+    .form-group button { 
+        width: 100%; 
+        padding: 12px; 
+        background: #007bff; 
+        color: white; 
+        border: none; 
+        border-radius: 4px; 
+        cursor: pointer; 
+        font-size: 16px; 
+    }
+    .form-group button:hover { 
+        background: #0056b3; 
+    }
+    .demo-info { 
+        background: #d4edda; 
+        color: #155724; 
+        border: 1px solid #c3e6cb; 
+        padding: 15px; 
+        margin-bottom: 20px; 
+        border-radius: 4px; 
+    }
+    .register-link {
+        text-align: center;
+        margin-top: 20px;
+        padding-top: 15px;
+        border-top: 1px solid #eee;
+    }
+    .register-link a {
+        color: #007bff;
+        text-decoration: none;
+    }
+    .register-link a:hover {
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-container">
+  
+    
+    <form method="post">
+        <div class="form-group">
+            <label for="username">ユーザー名</label>
+            <input type="text" id="username" name="username" required>
+        </div>
+        <div class="form-group">
+            <label for="password">パスワード</label>
+            <input type="password" id="password" name="password" required>
+        </div>
+        <div class="form-group">
+            <button type="submit">ログイン</button>
+        </div>
+    </form>
+    
+    <div class="register-link">
+        <p>アカウントをお持ちでない方は<br><a href="{{ url_for('register') }}">新規登録はこちら</a></p>
+    </div>
+</div>
+{% endblock %}
