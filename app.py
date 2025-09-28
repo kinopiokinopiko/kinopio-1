@@ -8,6 +8,119 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import re
 from bs4 import BeautifulSoup
 import time
+# app.py の冒頭部分を以下のように変更
+
+import os
+import sqlite3
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from urllib.parse import urlparse
+
+# データベース設定
+DATABASE_URL = os.environ.get('DATABASE_URL')
+USE_POSTGRES = DATABASE_URL is not None
+
+def get_db():
+    """データベース接続を取得"""
+    if USE_POSTGRES:
+        conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+        return conn
+    else:
+        conn = sqlite3.connect('portfolio.db')
+        conn.row_factory = sqlite3.Row
+        return conn
+
+def init_db():
+    """データベースの初期化"""
+    conn = get_db()
+    c = conn.cursor()
+    
+    if USE_POSTGRES:
+        # PostgreSQL用のテーブル作成
+        c.execute('''CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(255) UNIQUE NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
+        
+        c.execute('''CREATE TABLE IF NOT EXISTS assets (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER,
+            asset_type VARCHAR(50) NOT NULL,
+            symbol VARCHAR(50) NOT NULL,
+            name VARCHAR(255),
+            quantity REAL NOT NULL,
+            price REAL DEFAULT 0,
+            avg_cost REAL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )''')
+        
+        # デフォルトユーザー作成
+        c.execute("SELECT id FROM users WHERE username = 'demo'")
+        if not c.fetchone():
+            from werkzeug.security import generate_password_hash
+            demo_hash = generate_password_hash('demo123')
+            c.execute("INSERT INTO users (username, password_hash) VALUES (%s, %s)", 
+                     ('demo', demo_hash))
+    else:
+        # SQLite用のテーブル作成（既存のコード）
+        c.execute('''CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
+        
+        c.execute('''CREATE TABLE IF NOT EXISTS assets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            asset_type TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            name TEXT,
+            quantity REAL NOT NULL,
+            price REAL DEFAULT 0,
+            avg_cost REAL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )''')
+        
+        # デフォルトユーザー作成
+        c.execute("SELECT id FROM users WHERE username = 'demo'")
+        if not c.fetchone():
+            from werkzeug.security import generate_password_hash
+            demo_hash = generate_password_hash('demo123')
+            c.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)", 
+                     ('demo', demo_hash))
+
+    conn.commit()
+    conn.close()
+
+# データベースクエリも修正が必要です
+def execute_query(query, params=None, fetch_one=False, fetch_all=False):
+    """データベースクエリを実行"""
+    conn = get_db()
+    c = conn.cursor()
+    
+    if USE_POSTGRES:
+        # PostgreSQLでは ? の代わりに %s を使用
+        query = query.replace('?', '%s')
+    
+    if params:
+        c.execute(query, params)
+    else:
+        c.execute(query)
+    
+    result = None
+    if fetch_one:
+        result = c.fetchone()
+    elif fetch_all:
+        result = c.fetchall()
+    
+    conn.commit()
+    conn.close()
+    return result
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-this')
@@ -842,3 +955,4 @@ def update_all_prices():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
