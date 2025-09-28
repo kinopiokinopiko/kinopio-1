@@ -9,7 +9,9 @@ services:
         generateValue: true
       - key: FLASK_ENV
         value: production
+    runtime: python3.11
     disk:
       name: portfolio-data
       mountPath: /opt/render/project/src
       sizeGB: 1
+
