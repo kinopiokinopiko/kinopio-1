@@ -4,6 +4,7 @@ Werkzeug==2.3.7
 yfinance==0.2.18
 beautifulsoup4==4.12.2
 gunicorn
+psycopg2-binary==2.9.9
 
 
 
