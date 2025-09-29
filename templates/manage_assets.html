@@ -4,12 +4,12 @@
 
 {% block extra_styles %}
 <style>
-    .profit {
-        color: #28a745;
+    .profit-red {
+        color: #dc3545;
         font-weight: bold;
     }
-    .loss {
-        color: #dc3545;
+    .profit-green {
+        color: #28a745;
         font-weight: bold;
     }
     
@@ -22,9 +22,6 @@
         margin-bottom: 20px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         text-align: center;
-    }
-    .summary-card.loss-card {
-        background: linear-gradient(135deg, #dc3545 0%, #e74c3c 100%);
     }
     .summary-title {
         font-size: 14px;
@@ -187,11 +184,11 @@
         font-size: 20px;
         font-weight: bold;
     }
-    .stock-profit-value.profit {
-        color: #28a745;
-    }
-    .stock-profit-value.loss {
+    .stock-profit-value.profit-red {
         color: #dc3545;
+    }
+    .stock-profit-value.profit-green {
+        color: #28a745;
     }
     .stock-actions {
         display: flex;
@@ -323,7 +320,7 @@
     {% endfor %}
     {% set total_profit = total_value.amount - total_cost.amount %}
     
-    <div class="summary-card {% if total_profit < 0 %}loss-card{% endif %}">
+    <div class="summary-card">
         <div class="summary-title">{{ info.title }} 時価総額</div>
         <div class="summary-value">
             {% if asset_type == 'us_stock' %}
@@ -334,12 +331,14 @@
         </div>
         {% if asset_type != 'cash' %}
         <div class="summary-profit">
-            {% if total_profit >= 0 %}+{% endif %}
-            {% if asset_type == 'us_stock' %}
-                ${{ "{:,.2f}".format(total_profit) }}
-            {% else %}
-                {{ "{:,.0f}".format(total_profit) }}円
-            {% endif %}
+            <span class="{% if total_profit >= 0 %}profit-red{% else %}profit-green{% endif %}">
+                {% if total_profit >= 0 %}+{% endif %}
+                {% if asset_type == 'us_stock' %}
+                    ${{ "{:,.2f}".format(total_profit) }}
+                {% else %}
+                    {{ "{:,.0f}".format(total_profit) }}円
+                {% endif %}
+            </span>
         </div>
         {% endif %}
     </div>
@@ -449,7 +448,7 @@
         {% set profit = current_value - cost_value %}
         <div class="stock-profit-box">
             <div class="stock-profit-label">損益</div>
-            <div class="stock-profit-value {% if profit >= 0 %}profit{% else %}loss{% endif %}">
+            <div class="stock-profit-value {% if profit >= 0 %}profit-red{% else %}profit-green{% endif %}">
                 {% if profit >= 0 %}+{% endif %}
                 {% if asset_type == 'us_stock' %}
                     ${{ "{:,.2f}".format(profit) }}
@@ -520,7 +519,7 @@
                 {% set cost_value = asset.quantity * asset.avg_cost %}
                 {% set profit = current_value - cost_value %}
                 {% if profit >= 0 %}
-                    <span class="profit">
+                    <span class="profit-red">
                         {% if asset_type == 'us_stock' %}
                             +${{ "{:,.2f}".format(profit) }}
                         {% else %}
@@ -528,7 +527,7 @@
                         {% endif %}
                     </span>
                 {% else %}
-                    <span class="loss">
+                    <span class="profit-green">
                         {% if asset_type == 'us_stock' %}
                             ${{ "{:,.2f}".format(profit) }}
                         {% else %}
