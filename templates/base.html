@@ -2,13 +2,16 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>{% block title %}資産管理システム{% endblock %}</title>
     <style>
+        * {
+            box-sizing: border-box;
+        }
         body { 
-            font-family: Arial, sans-serif; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             margin: 0; 
-            padding: 20px; 
+            padding: 10px; 
             background: #f5f5f5; 
         }
         .container { 
@@ -17,22 +20,28 @@
         }
         .header { 
             background: white; 
-            padding: 20px; 
+            padding: 15px; 
             border-radius: 8px; 
-            margin-bottom: 20px; 
+            margin-bottom: 15px; 
             box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
         }
         .nav-links { 
-            margin: 20px 0; 
+            margin: 15px 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
         }
         .nav-links a { 
             display: inline-block; 
-            margin-right: 15px; 
-            padding: 8px 16px; 
+            padding: 10px 16px; 
             background: #007bff; 
             color: white; 
             text-decoration: none; 
             border-radius: 4px; 
+            font-size: 14px;
+            flex: 1;
+            min-width: 120px;
+            text-align: center;
         }
         .nav-links a:hover { 
             background: #0056b3; 
@@ -40,23 +49,18 @@
         .back-link { 
             color: #007bff; 
             text-decoration: none; 
+            font-size: 14px;
+            display: inline-block;
+            margin-bottom: 10px;
         }
         .back-link:hover { 
             text-decoration: underline; 
         }
-        .user-info { 
-            float: right; 
-        }
-        .logout-btn { 
-            background: #dc3545; 
-        }
-        .logout-btn:hover { 
-            background: #c82333; 
-        }
         .alert { 
-            padding: 10px; 
-            margin-bottom: 20px; 
-            border-radius: 4px; 
+            padding: 12px; 
+            margin-bottom: 15px; 
+            border-radius: 4px;
+            font-size: 14px;
         }
         .alert-success { 
             background: #d4edda; 
@@ -70,58 +74,63 @@
         }
         .form-section { 
             background: white; 
-            padding: 20px; 
+            padding: 15px; 
             border-radius: 8px; 
-            margin-bottom: 20px; 
+            margin-bottom: 15px; 
             box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
         }
         .form-row { 
             display: flex; 
-            gap: 10px; 
+            gap: 8px; 
             align-items: end; 
-            margin-bottom: 10px; 
+            margin-bottom: 10px;
+            flex-wrap: wrap;
         }
         .form-group { 
-            margin-bottom: 20px; 
+            margin-bottom: 15px;
+            flex: 1;
+            min-width: 100%;
         }
         label { 
             display: block; 
             margin-bottom: 5px; 
-            font-weight: bold; 
+            font-weight: bold;
+            font-size: 13px;
         }
         input[type="text"], input[type="password"], input[type="number"] { 
-            padding: 8px; 
+            padding: 10px; 
             border: 1px solid #ddd; 
             border-radius: 4px; 
-            flex: 1; 
-            box-sizing: border-box;
+            width: 100%;
+            font-size: 14px;
         }
         input[type="text"]:focus, input[type="password"]:focus, input[type="number"]:focus {
             outline: none;
             border-color: #007bff;
         }
         button { 
-            padding: 8px 16px; 
+            padding: 10px 16px; 
             background: #007bff; 
             color: white; 
             border: none; 
             border-radius: 4px; 
-            cursor: pointer; 
+            cursor: pointer;
+            font-size: 14px;
+            width: 100%;
         }
         button:hover { 
             background: #0056b3; 
         }
         .delete-btn { 
-            background: #dc3545; 
-            padding: 4px 8px; 
-            font-size: 12px; 
+            background: #dc3545;
+            padding: 8px 12px;
+            font-size: 13px;
         }
         .delete-btn:hover { 
             background: #c82333; 
         }
         .update-btn { 
-            background: #28a745; 
-            margin-left: 5px; 
+            background: #28a745;
         }
         .update-btn:hover { 
             background: #218838; 
@@ -137,7 +146,8 @@
         th, td { 
             padding: 12px; 
             text-align: left; 
-            border-bottom: 1px solid #ddd; 
+            border-bottom: 1px solid #ddd;
+            font-size: 13px;
         }
         th { 
             background: #f8f9fa; 
@@ -145,6 +155,28 @@
         }
         .text-right { 
             text-align: right; 
+        }
+        
+        /* タブレット以上 */
+        @media (min-width: 768px) {
+            body {
+                padding: 20px;
+            }
+            .header {
+                padding: 20px;
+            }
+            .form-section {
+                padding: 20px;
+            }
+            .nav-links a {
+                flex: 0 1 auto;
+            }
+            .form-group {
+                min-width: auto;
+            }
+            button {
+                width: auto;
+            }
         }
     </style>
     {% block extra_styles %}{% endblock %}
