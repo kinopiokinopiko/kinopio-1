@@ -226,13 +226,27 @@ def get_stock_name(symbol, is_jp=False):
         return get_us_stock_info(symbol)['name']
 
 def get_gold_price():
-    """金価格を取得（デフォルト値を返す）"""
+    """金価格を取得（田中貴金属からスクレイピング）"""
     try:
-        # 簡易実装: 固定値または外部APIから取得
-        return 10000  # 仮の金価格（円/g）
+        tanaka_url = "https://gold.tanaka.co.jp/commodity/souba/english/index.php"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        res = requests.get(tanaka_url, headers=headers, timeout=10)
+        res.encoding = res.apparent_encoding
+        soup = BeautifulSoup(res.text, "html.parser")
+        
+        for tr in soup.find_all("tr"):
+            tds = tr.find_all("td")
+            if len(tds) > 1 and tds[0].get_text(strip=True).upper() == "GOLD":
+                price_text = tds[1].get_text(strip=True)
+                price_match = re.search(r"([0-9,]+) yen", price_text)
+                if price_match:
+                    return int(price_match.group(1).replace(",", ""))
+        return 0
     except Exception as e:
         print(f"Error getting gold price: {e}")
-        return 10000
+        return 0
 
 def get_usd_jpy_rate():
     """USD/JPY レートを取得"""
