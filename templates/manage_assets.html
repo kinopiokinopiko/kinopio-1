@@ -12,18 +12,154 @@
         color: #dc3545;
         font-weight: bold;
     }
-    .form-field {
-        margin-right: 10px;
+    
+    /* 株式カードスタイル */
+    .stock-card {
+        background: white;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
-    .form-field input {
-        width: 120px;
+    .stock-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 10px;
+        border-bottom: 2px solid #f0f0f0;
+        padding-bottom: 10px;
     }
-    .form-field.wide input {
-        width: 150px;
+    .stock-symbol {
+        font-size: 18px;
+        font-weight: bold;
+        color: #333;
     }
-    .form-field label {
+    .stock-name {
+        font-size: 14px;
+        color: #666;
+        margin-top: 3px;
+    }
+    .stock-price {
+        font-size: 20px;
+        font-weight: bold;
+        color: #007bff;
+        text-align: right;
+    }
+    .stock-change {
         font-size: 12px;
+        text-align: right;
+    }
+    .stock-details {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin: 10px 0;
+        font-size: 13px;
+    }
+    .detail-item {
+        display: flex;
+        flex-direction: column;
+    }
+    .detail-label {
+        color: #666;
+        font-size: 11px;
         margin-bottom: 2px;
+    }
+    .detail-value {
+        font-weight: bold;
+        color: #333;
+    }
+    .stock-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #f0f0f0;
+    }
+    .edit-btn, .delete-btn {
+        flex: 1;
+        padding: 8px;
+        border-radius: 4px;
+        text-align: center;
+        text-decoration: none;
+        font-size: 13px;
+        border: none;
+        cursor: pointer;
+    }
+    .edit-btn {
+        background: #28a745;
+        color: white;
+    }
+    .delete-btn {
+        background: #dc3545;
+        color: white;
+    }
+    
+    /* フォームスタイル */
+    .form-section {
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .form-section h3 {
+        margin-top: 0;
+        font-size: 16px;
+    }
+    .form-group-mobile {
+        margin-bottom: 12px;
+    }
+    .form-group-mobile label {
+        display: block;
+        font-size: 12px;
+        margin-bottom: 4px;
+        font-weight: bold;
+        color: #555;
+    }
+    .form-group-mobile input {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        box-sizing: border-box;
+    }
+    .form-buttons {
+        display: flex;
+        gap: 8px;
+        margin-top: 15px;
+    }
+    .form-buttons button {
+        flex: 1;
+        padding: 12px;
+        font-size: 14px;
+    }
+    
+    /* レスポンシブ対応 */
+    @media (max-width: 768px) {
+        .container {
+            padding: 10px;
+        }
+        .header h1 {
+            font-size: 18px;
+        }
+        .back-link {
+            font-size: 14px;
+        }
+    }
+    
+    /* デスクトップ用テーブル非表示 */
+    .desktop-table {
+        display: none;
+    }
+    @media (min-width: 769px) {
+        .mobile-cards {
+            display: none;
+        }
+        .desktop-table {
+            display: table;
+        }
     }
 </style>
 {% endblock %}
@@ -38,26 +174,33 @@
     <h3>{{ info.title }}を追加/更新</h3>
     <form method="post" action="{{ url_for('add_asset') }}">
         <input type="hidden" name="asset_type" value="{{ asset_type }}">
-        <div class="form-row">
-            <div class="form-field">
-                <label>{{ info.symbol_label }}</label>
-                <input type="text" name="symbol" placeholder="{{ info.symbol_label }}" required>
-            </div>
+        
+        <div class="form-group-mobile">
+            <label>{{ info.symbol_label }}</label>
+            <input type="text" name="symbol" placeholder="{{ info.symbol_label }}" required>
+        </div>
+        
+        {% if asset_type not in ['cash'] %}
+        <div class="form-group-mobile">
+            <label>名前（オプション）</label>
+            <input type="text" name="name" placeholder="名前（オプション）">
+        </div>
+        {% endif %}
+        
+        <div class="form-group-mobile">
+            <label>{{ info.quantity_label }}</label>
+            <input type="number" name="quantity" step="0.01" placeholder="{{ info.quantity_label }}" required>
+        </div>
+        
+        {% if asset_type not in ['cash'] %}
+        <div class="form-group-mobile">
+            <label>平均取得単価</label>
+            <input type="number" name="avg_cost" step="0.01" placeholder="平均取得単価" required>
+        </div>
+        {% endif %}
+        
+        <div class="form-buttons">
             {% if asset_type not in ['cash'] %}
-            <div class="form-field wide">
-                <label>名前（オプション）</label>
-                <input type="text" name="name" placeholder="名前（オプション）">
-            </div>
-            {% endif %}
-            <div class="form-field">
-                <label>{{ info.quantity_label }}</label>
-                <input type="number" name="quantity" step="0.01" placeholder="{{ info.quantity_label }}" required>
-            </div>
-            {% if asset_type not in ['cash'] %}
-            <div class="form-field">
-                <label>平均取得単価</label>
-                <input type="number" name="avg_cost" step="0.01" placeholder="平均取得単価" required>
-            </div>
             <button type="button" onclick="updatePrices()" class="update-btn">価格更新</button>
             {% endif %}
             <button type="submit">追加/更新</button>
@@ -66,7 +209,86 @@
 </div>
 
 {% if assets %}
-<table>
+<!-- モバイル用カード表示 -->
+<div class="mobile-cards">
+    {% for asset in assets %}
+    <div class="stock-card">
+        <div class="stock-header">
+            <div>
+                <div class="stock-symbol">{{ asset.symbol }}</div>
+                {% if asset_type not in ['cash'] %}
+                <div class="stock-name">{{ asset.name or '-' }}</div>
+                {% endif %}
+            </div>
+            <div>
+                <div class="stock-price">
+                    {% if asset_type == 'us_stock' %}
+                        ${{ "{:,.2f}".format(asset.price) }}
+                    {% elif asset_type not in ['cash'] %}
+                        {{ "{:,.0f}".format(asset.price) }}円
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="stock-details">
+            <div class="detail-item">
+                <span class="detail-label">{{ info.quantity_label }}</span>
+                <span class="detail-value">{{ "{:,.2f}".format(asset.quantity) }}</span>
+            </div>
+            
+            {% if asset_type not in ['cash'] %}
+            <div class="detail-item">
+                <span class="detail-label">平均取得単価</span>
+                <span class="detail-value">
+                    {% if asset_type == 'us_stock' %}
+                        ${{ "{:,.2f}".format(asset.avg_cost) }}
+                    {% else %}
+                        {{ "{:,.0f}".format(asset.avg_cost) }}円
+                    {% endif %}
+                </span>
+            </div>
+            
+            <div class="detail-item">
+                <span class="detail-label">評価額</span>
+                <span class="detail-value">
+                    {% if asset_type == 'us_stock' %}
+                        ${{ "{:,.2f}".format(asset.quantity * asset.price) }}
+                    {% else %}
+                        {{ "{:,.0f}".format(asset.quantity * asset.price) }}円
+                    {% endif %}
+                </span>
+            </div>
+            
+            <div class="detail-item">
+                <span class="detail-label">損益</span>
+                {% set current_value = asset.quantity * asset.price %}
+                {% set cost_value = asset.quantity * asset.avg_cost %}
+                {% set profit = current_value - cost_value %}
+                <span class="detail-value {% if profit >= 0 %}profit{% else %}loss{% endif %}">
+                    {% if asset_type == 'us_stock' %}
+                        {% if profit >= 0 %}+{% endif %}${{ "{:,.2f}".format(profit) }}
+                    {% else %}
+                        {% if profit >= 0 %}+{% endif %}{{ "{:,.0f}".format(profit) }}円
+                    {% endif %}
+                </span>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="stock-actions">
+            <a href="{{ url_for('edit_asset', asset_id=asset.id) }}" class="edit-btn">編集</a>
+            <form method="post" action="{{ url_for('delete_asset') }}" style="flex: 1; margin: 0;">
+                <input type="hidden" name="asset_id" value="{{ asset.id }}">
+                <button type="submit" class="delete-btn" onclick="return confirm('削除しますか？')">削除</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- デスクトップ用テーブル表示 -->
+<table class="desktop-table">
     <thead>
         <tr>
             <th>{{ info.symbol_label }}</th>
