@@ -11,6 +11,10 @@
         margin-bottom: 20px;
         box-shadow: 0 2px 6px rgba(0,0,0,0.1);
     }
+    /* 全体の読みやすいフォント */
+    body, .header-container, .asset-card, .total-assets-card {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    }
     .header-top {
         display: flex;
         justify-content: space-between;
@@ -47,15 +51,16 @@
         margin-bottom: 15px;
     }
     
-    /* 総資産カード */
+    /* 総資産カード（シンプル表示） */
     .total-assets-card {
-        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-        color: white;
+        background: #ffffff; /* シンプルな白背景 */
+        color: #333;
         border-radius: 12px;
         padding: 25px;
         margin-bottom: 20px;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.06);
         text-align: center;
+        border: 1px solid #000000; /* 黒い枠線 */
     }
     .total-assets-label {
         font-size: 16px;
@@ -65,24 +70,28 @@
     }
     .total-assets-value {
         font-size: 42px;
-        font-weight: bold;
+        font-weight: 700;
         margin-bottom: 15px;
-        text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        letter-spacing: -1px;
+        /* 数字が読みやすいように軽いシャドウだけ残す */
+        text-shadow: 0 1px 2px rgba(0,0,0,0.08);
+        letter-spacing: -0.5px;
+        font-variant-numeric: tabular-nums; /* 桁揃え */
     }
     .total-profit {
         font-size: 22px;
         font-weight: bold;
         padding: 10px 20px;
-        background: rgba(255,255,255,0.25);
+        background: #f7faf8; /* ほのかな淡色 */
         border-radius: 25px;
         display: inline-block;
+        border: 1px solid #e6eef0;
     }
-    .total-profit.profit-red {
-        color: #fff;
+    /* 表示ルール: プラスは赤、マイナスは緑 */
+    .total-profit.profit-plus {
+        color: #dc3545; /* 赤 */
     }
-    .total-profit.profit-green {
-        color: #fff;
+    .total-profit.profit-minus {
+        color: #28a745; /* 緑 */
     }
     
     .update-all-btn {
@@ -142,12 +151,13 @@
         padding-top: 10px;
         border-top: 1px solid #f0f0f0;
     }
-    .profit-red {
+    /* 各資産の損益表示: プラス=赤, マイナス=緑 */
+    .profit-plus {
         color: #dc3545;
         font-weight: bold;
         font-size: 15px;
     }
-    .profit-green {
+    .profit-minus {
         color: #28a745;
         font-weight: bold;
         font-size: 15px;
@@ -212,38 +222,35 @@
     <div class="rate-info">USD/JPY: {{ "{:.2f}".format(usd_jpy) }} 円</div>
 </div>
 
-<!-- 総資産カード -->
 <div class="total-assets-card">
     <div class="total-assets-label">総資産</div>
     <div class="total-assets-value">{{ "{:,.0f}".format(total_assets) }} 円</div>
-    <div class="total-profit {% if total_profit >= 0 %}profit-red{% else %}profit-green{% endif %}">
+    <div class="total-profit {% if total_profit >= 0 %}profit-plus{% else %}profit-minus{% endif %}">
         {% if total_profit >= 0 %}+{% endif %}{{ "{:,.0f}".format(total_profit) }} 円
     </div>
 </div>
 
-<!-- 全価格更新ボタン -->
 <form method="post" action="{{ url_for('update_all_prices') }}" style="margin: 0;">
     <button type="submit" class="update-all-btn" onclick="return confirm('全ての価格を更新しますか？時間がかかる場合があります。')">
         全価格更新
     </button>
 </form>
 
-<!-- ナビゲーションボタン -->
 <div class="nav-links">
     <a href="{{ url_for('manage_assets', asset_type='jp_stock') }}">日本株</a>
     <a href="{{ url_for('manage_assets', asset_type='us_stock') }}">米国株</a>
     <a href="{{ url_for('manage_assets', asset_type='cash') }}">現金</a>
     <a href="{{ url_for('manage_assets', asset_type='gold') }}">金</a>
+    <a href="{{ url_for('manage_assets', asset_type='crypto') }}">暗号資産</a>
 </div>
 
-<!-- 資産カードグリッド -->
 <div class="asset-grid">
     <div class="asset-card">
         <h3>日本株</h3>
         <div class="asset-value">{{ "{:,.0f}".format(jp_total) }} 円</div>
         <div class="asset-count">{{ jp_stocks|length }} 銘柄</div>
         <div class="profit-info">
-            <span class="{% if jp_profit >= 0 %}profit-red{% else %}profit-green{% endif %}">
+            <span class="{% if jp_profit >= 0 %}profit-plus{% else %}profit-minus{% endif %}">
                 {% if jp_profit >= 0 %}+{% endif %}{{ "{:,.0f}".format(jp_profit) }} 円
             </span>
         </div>
@@ -254,7 +261,7 @@
         <div class="asset-value">{{ "{:,.0f}".format(us_total_jpy) }} 円</div>
         <div class="asset-count">${{ "{:,.2f}".format(us_total_usd) }} ({{ us_stocks|length }} 銘柄)</div>
         <div class="profit-info">
-            <span class="{% if us_profit_jpy >= 0 %}profit-red{% else %}profit-green{% endif %}">
+            <span class="{% if us_profit_jpy >= 0 %}profit-plus{% else %}profit-minus{% endif %}">
                 {% if us_profit_jpy >= 0 %}+{% endif %}{{ "{:,.0f}".format(us_profit_jpy) }} 円
             </span>
         </div>
@@ -271,8 +278,19 @@
         <div class="asset-value">{{ "{:,.0f}".format(gold_total) }} 円</div>
         <div class="asset-count">{{ gold_items|length }} 項目</div>
         <div class="profit-info">
-            <span class="{% if gold_profit >= 0 %}profit-red{% else %}profit-green{% endif %}">
+            <span class="{% if gold_profit >= 0 %}profit-plus{% else %}profit-minus{% endif %}">
                 {% if gold_profit >= 0 %}+{% endif %}{{ "{:,.0f}".format(gold_profit) }} 円
+            </span>
+        </div>
+    </div>
+    
+    <div class="asset-card">
+        <h3>暗号資産</h3>
+        <div class="asset-value">{{ "{:,.0f}".format(crypto_total) }} 円</div>
+        <div class="asset-count">{{ crypto_items|length }} 項目</div>
+        <div class="profit-info">
+            <span class="{% if crypto_profit >= 0 %}profit-plus{% else %}profit-minus{% endif %}">
+                {% if crypto_profit >= 0 %}+{% endif %}{{ "{:,.0f}".format(crypto_profit) }} 円
             </span>
         </div>
     </div>

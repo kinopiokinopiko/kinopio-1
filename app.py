@@ -8,6 +8,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import re
 from bs4 import BeautifulSoup
 import time
+from decimal import Decimal, InvalidOperation
 
 # PostgreSQLサポート
 try:
@@ -16,6 +17,12 @@ try:
     POSTGRES_AVAILABLE = True
 except ImportError:
     POSTGRES_AVAILABLE = False
+
+# 暗号通貨銘柄（固定）
+CRYPTO_SYMBOLS = ['BTC', 'ETH', 'XRP', 'DOGE']
+
+# デバッグフラグ（環境変数で有効化可能）
+DEBUG_CRYPTO = os.environ.get('CRYPTO_DEBUG', '0') == '1'
 
 # データベース設定
 DATABASE_URL = os.environ.get('DATABASE_URL')
@@ -26,6 +33,7 @@ if DATABASE_URL and DATABASE_URL.startswith('postgres://'):
 
 USE_POSTGRES = DATABASE_URL is not None and POSTGRES_AVAILABLE
 
+
 def get_db():
     """データベース接続を取得"""
     if USE_POSTGRES:
@@ -35,6 +43,7 @@ def get_db():
         conn = sqlite3.connect('portfolio.db')
         conn.row_factory = sqlite3.Row
         return conn
+
 
 def init_db():
     """データベースの初期化"""
@@ -104,6 +113,7 @@ def init_db():
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-this-in-production')
 
+
 def get_current_user():
     """現在のユーザーを取得"""
     if 'user_id' not in session:
@@ -120,6 +130,53 @@ def get_current_user():
     user = c.fetchone()
     conn.close()
     return user
+
+
+# --- ユーティリティ：文字列正規化・数値抽出 ---
+
+_FULLWIDTH_TRANS = {ord(f): ord(t) for f, t in zip('０１２３４５６７８９', '0123456789')}
+_FULLWIDTH_TRANS.update({ord('，'): ord(','), ord('．'): ord('.'), ord('＋'): ord('+'), ord('－'): ord('-'), ord('　'): ord(' '), ord('％'): ord('%')})
+
+
+def normalize_fullwidth(s):
+    if s is None:
+        return s
+    return s.translate(_FULLWIDTH_TRANS)
+
+
+def extract_number_from_string(s):
+    """文字列中から最初に見つかる妥当な数値を抽出して float を返す（小数点／指数表記対応）"""
+    if not s:
+        return None
+    try:
+        s = normalize_fullwidth(s)
+    except Exception:
+        pass
+
+    s = s.replace('\xa0', ' ')
+
+    # 優先パターン：桁区切りカンマやスペースに対応し、小数および指数表記を許す
+    m = re.search(r'([+-]?\d{1,3}(?:[,\s]\d{3})*(?:\.\d+)?(?:[eE][+-]?\d+)?)', s)
+    if not m:
+        # 最低限の数値（小数・指数含む）
+        m = re.search(r'([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)', s)
+    if not m:
+        return None
+
+    num_str = m.group(1)
+    # カンマと空白の除去
+    num_str = num_str.replace(',', '').replace(' ', '')
+
+    try:
+        d = Decimal(num_str)
+        # float に変換して返す（DBの REAL に合わせるため）
+        return float(d)
+    except (InvalidOperation, ValueError):
+        try:
+            return float(num_str)
+        except Exception:
+            return None
+
 
 def scrape_yahoo_finance_jp(code):
     """Yahoo Finance APIから日本株の情報を取得"""
@@ -224,6 +281,103 @@ def get_stock_name(symbol, is_jp=False):
         return get_jp_stock_info(symbol)['name']
     else:
         return get_us_stock_info(symbol)['name']
+        
+def get_crypto_price(symbol):
+    """みんかぶ暗号資産から価格をスクレイピング（BTC/ETH/XRP/DOGEに限定）"""
+    try:
+        symbol = (symbol or '').upper()
+        if symbol not in CRYPTO_SYMBOLS:
+            # サポート外は0を返す（または例外にしても良い）
+            print(f"Unsupported crypto symbol requested: {symbol}")
+            return 0.0
+
+        url = f"https://cc.minkabu.jp/pair/{symbol}_JPY"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        response.encoding = response.apparent_encoding
+        text = response.text
+        # 0) ページ内の JSON（"last" や "price" 等）を探索（指数表記も含む）
+        json_matches = re.findall(r'"(?:last|price|lastPrice|close|current|ltp)"\s*:\s*"?([0-9\.,Ee+\-]+)"?', text)
+        if json_matches:
+            for jm in json_matches:
+                val = extract_number_from_string(jm)
+                if val is not None and val > 0:
+                    if DEBUG_CRYPTO:
+                        print(f"[DEBUG] Found price in JSON-like field: {jm} -> {val}")
+                    return round(val, 2)
+
+        # 1) 「現在値」の近傍にある「xxx 円」を探す（優先）
+        idx = text.find('現在値')
+        if idx != -1:
+            snippet = text[idx: idx + 700]
+            m = re.search(r'([0-9]{1,3}(?:,[0-9]{3})*(?:\.\d+)?)\s*円', snippet)
+            if m:
+                try:
+                    return float(m.group(1).replace(',', ''))
+                except:
+                    pass
+
+        # 2) data-price や data-last などの属性（JSで埋めている場合）
+        m = re.search(r'data-price=["\']([0-9\.,Ee+\-]+)["\']', text)
+        if m:
+            val = extract_number_from_string(m.group(1))
+            if val is not None:
+                return round(val, 2)
+
+        m = re.search(r'"last"\s*:\s*["\']?([0-9\.,Ee+\-]+)["\']?', text)
+        if m:
+            val = extract_number_from_string(m.group(1))
+            if val is not None:
+                return round(val, 2)
+
+        # 3) BeautifulSoup を使って、よく使われるクラス／要素を探す
+        soup = BeautifulSoup(text, 'html.parser')
+        selectors = ['div.pairPrice', '.pairPrice', '.pair_price', 'div.priceWrap', 'div.kv',
+                     'span.yen', 'div.stock_price span.yen', 'p.price', 'span.price', 'div.price',
+                     'span.value', 'div.value', 'strong', 'b']
+        for sel in selectors:
+            try:
+                tag = soup.select_one(sel)
+            except Exception:
+                tag = None
+            if tag:
+                txt = tag.get_text(' ', strip=True)
+                val = extract_number_from_string(txt)
+                if val is not None and val > 0:
+                    if DEBUG_CRYPTO:
+                        print(f"[DEBUG] Found price by selector {sel}: {txt} -> {val}")
+                    return round(val, 2)
+
+        # 4) ページ中の全ての "xxx 円" を探して妥当な最初の値を取る
+        normalized = normalize_fullwidth(text)
+        matches = re.findall(r'([0-9]{1,3}(?:,[0-9]{3})*(?:\.\d+)?)\s*円', normalized)
+        for num in matches:
+            try:
+                val = float(num.replace(',', ''))
+                if val > 0:
+                    return round(val, 2)
+            except:
+                continue
+
+        # 5) 指数表記（例: 0.169717e8 等）も探す
+        m2 = re.search(r'([0-9\.,]+[eE][+-]?\d+)', text)
+        if m2:
+            val = extract_number_from_string(m2.group(1))
+            if val is not None and val > 0:
+                if DEBUG_CRYPTO:
+                    print(f"[DEBUG] Found price by scientific notation: {m2.group(1)} -> {val}")
+                return round(val, 2)
+
+        # それでも取れなければ0
+        if DEBUG_CRYPTO:
+            snippet = text[:1200].replace('\n', ' ')
+            print(f"[DEBUG] Failed to parse crypto price for {symbol}. Dumping small snippet:\n{snippet}\n--- end snippet ---")
+        return 0.0
+    except Exception as e:
+        print(f"Error getting crypto price for {symbol}: {e}")
+        return 0.0
 
 def get_gold_price():
     """金価格を取得（田中貴金属からスクレイピング）"""
@@ -384,6 +538,10 @@ def dashboard():
         c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
                     WHERE user_id = %s AND asset_type = %s''', (user['id'], 'gold'))
         gold_items = c.fetchall()
+        
+        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
+                    WHERE user_id = %s AND asset_type = %s''', (user['id'], 'crypto'))
+        crypto_items = c.fetchall()
     else:
         c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
                     WHERE user_id = ? AND asset_type = "jp_stock"''', (user['id'],))
@@ -400,6 +558,10 @@ def dashboard():
         c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
                     WHERE user_id = ? AND asset_type = "gold"''', (user['id'],))
         gold_items = c.fetchall()
+        
+        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
+                    WHERE user_id = ? AND asset_type = "crypto"''', (user['id'],))
+        crypto_items = c.fetchall()
     
     conn.close()
     
@@ -421,18 +583,23 @@ def dashboard():
     gold_cost_total = sum(item['quantity'] * item['avg_cost'] for item in gold_items)
     gold_profit = gold_total - gold_cost_total
     
-    total_assets = jp_total + us_total_jpy + cash_total + gold_total
-    total_cost = jp_cost_total + (us_cost_total_usd * usd_jpy) + cash_total + gold_cost_total
+    crypto_total = sum(item['quantity'] * item['price'] for item in crypto_items)
+    crypto_cost_total = sum(item['quantity'] * item['avg_cost'] for item in crypto_items)
+    crypto_profit = crypto_total - crypto_cost_total
+    
+    total_assets = jp_total + us_total_jpy + cash_total + gold_total + crypto_total
+    total_cost = jp_cost_total + (us_cost_total_usd * usd_jpy) + cash_total + gold_cost_total + crypto_cost_total
     total_profit = total_assets - total_cost
     
     return render_template('dashboard.html', 
                          jp_stocks=jp_stocks, us_stocks=us_stocks, 
-                         cash_items=cash_items, gold_items=gold_items,
+                         cash_items=cash_items, gold_items=gold_items, crypto_items=crypto_items,
                          jp_total=jp_total, jp_profit=jp_profit,
                          us_total_usd=us_total_usd, us_total_jpy=us_total_jpy, 
                          us_profit_usd=us_profit_usd, us_profit_jpy=us_profit_jpy,
                          cash_total=cash_total, gold_total=gold_total, 
                          gold_profit=gold_profit,
+                         crypto_total=crypto_total, crypto_profit=crypto_profit,
                          total_assets=total_assets, total_profit=total_profit, 
                          usd_jpy=usd_jpy,
                          username=session.get('username', ''))
@@ -460,12 +627,16 @@ def manage_assets(asset_type):
         'jp_stock': {'title': '日本株', 'symbol_label': '証券コード', 'quantity_label': '株数'},
         'us_stock': {'title': '米国株', 'symbol_label': 'シンボル', 'quantity_label': '株数'},
         'gold': {'title': '金 (Gold)', 'symbol_label': '種類', 'quantity_label': '重量(g)'},
-        'cash': {'title': '現金', 'symbol_label': '項目名', 'quantity_label': '金額'}
+        'cash': {'title': '現金', 'symbol_label': '項目名', 'quantity_label': '金額'},
+        'crypto': {'title': '暗号資産', 'symbol_label': '銘柄', 'quantity_label': '数量'}
     }
     
     info = type_info.get(asset_type, type_info['jp_stock'])
     
-    return render_template('manage_assets.html', assets=assets, asset_type=asset_type, info=info)
+    # crypto用の選択肢をテンプレートに渡す（プルダウンチップに使う）
+    crypto_symbols = CRYPTO_SYMBOLS
+    
+    return render_template('manage_assets.html', assets=assets, asset_type=asset_type, info=info, crypto_symbols=crypto_symbols)
 
 @app.route('/add_asset', methods=['POST'])
 def add_asset():
@@ -474,6 +645,7 @@ def add_asset():
         return redirect(url_for('login'))
     
     asset_type = request.form['asset_type']
+    # symbolは暗号資産だとプルダウン（ラジオ）で渡る想定。既存CSV入力等にも対応。
     symbol = request.form['symbol'].strip().upper()
     name = request.form.get('name', '').strip()
     quantity = float(request.form['quantity'])
@@ -484,6 +656,13 @@ def add_asset():
         price = get_gold_price()
         if not name:
             name = "金 (Gold)"
+    elif asset_type == 'crypto':
+        # 暗号資産は限定銘柄のみ受け付ける
+        if symbol not in CRYPTO_SYMBOLS:
+            flash('対応していない暗号資産です', 'error')
+            return redirect(url_for('manage_assets', asset_type='crypto'))
+        price = get_crypto_price(symbol)
+        name = name or symbol
     elif asset_type != 'cash':
         is_jp = (asset_type == 'jp_stock')
         try:
@@ -576,7 +755,8 @@ def edit_asset(asset_id):
         'jp_stock': {'title': '日本株', 'symbol_label': '証券コード', 'quantity_label': '株数'},
         'us_stock': {'title': '米国株', 'symbol_label': 'シンボル', 'quantity_label': '株数'},
         'gold': {'title': '金 (Gold)', 'symbol_label': '種類', 'quantity_label': '重量(g)'},
-        'cash': {'title': '現金', 'symbol_label': '項目名', 'quantity_label': '金額'}
+        'cash': {'title': '現金', 'symbol_label': '項目名', 'quantity_label': '金額'},
+        'crypto': {'title': '暗号資産', 'symbol_label': '銘柄', 'quantity_label': '数量'}
     }
     
     info = type_info.get(asset['asset_type'], type_info['jp_stock'])
@@ -619,6 +799,14 @@ def update_asset():
         price = get_gold_price()
         if not name:
             name = "金 (Gold)"
+    elif asset_type == 'crypto':
+        if symbol not in CRYPTO_SYMBOLS:
+            flash('対応していない暗号資産です', 'error')
+            conn.close()
+            return redirect(url_for('manage_assets', asset_type='crypto'))
+        price = get_crypto_price(symbol)
+        if not name:
+            name = symbol
     elif asset_type != 'cash':
         is_jp = (asset_type == 'jp_stock')
         try:
@@ -715,7 +903,24 @@ def update_prices():
                     c.execute('UPDATE assets SET price = ? WHERE id = ?', (gold_price, asset['id']))
                 time.sleep(0.5)
         except Exception as e:
-            pass
+            print(f"Error updating gold price: {e}")
+    elif asset_type == 'crypto':
+        for asset in assets:
+            try:
+                crypto_price = get_crypto_price(asset['symbol'])
+                if DEBUG_CRYPTO:
+                    print(f"[DEBUG] Updating {asset['symbol']} price to {crypto_price}")
+                if USE_POSTGRES:
+                    c.execute('UPDATE assets SET price = %s WHERE id = %s', (crypto_price, asset['id']))
+                else:
+                    c.execute('UPDATE assets SET price = ? WHERE id = ?', (crypto_price, asset['id']))
+                conn.commit()  # 各更新後にコミット
+                time.sleep(0.5)  # APIレート制限を考慮
+            except Exception as e:
+                print(f"Error updating crypto price for {asset['symbol']}: {e}")
+                if DEBUG_CRYPTO:
+                    import traceback
+                    traceback.print_exc()
     else:
         is_jp = (asset_type == 'jp_stock')
         for asset in assets:
@@ -803,6 +1008,27 @@ def update_all_prices():
                     c.execute('UPDATE assets SET price = %s WHERE id = %s', (gold_price, asset['id']))
                 else:
                     c.execute('UPDATE assets SET price = ? WHERE id = ?', (gold_price, asset['id']))
+        except:
+            pass
+            
+    # 暗号資産の価格更新
+    if USE_POSTGRES:
+        c.execute('SELECT id, symbol FROM assets WHERE user_id = %s AND asset_type = %s',
+                 (user['id'], 'crypto'))
+    else:
+        c.execute('SELECT id, symbol FROM assets WHERE user_id = ? AND asset_type = "crypto"',
+                 (user['id'],))
+    
+    crypto_assets = c.fetchall()
+    
+    for asset in crypto_assets:
+        try:
+            price = get_crypto_price(asset['symbol'])
+            if USE_POSTGRES:
+                c.execute('UPDATE assets SET price = %s WHERE id = %s', (price, asset['id']))
+            else:
+                c.execute('UPDATE assets SET price = ? WHERE id = ?', (price, asset['id']))
+            time.sleep(1)
         except:
             pass
     

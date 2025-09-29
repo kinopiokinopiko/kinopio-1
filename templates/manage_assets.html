@@ -229,7 +229,7 @@
         font-weight: bold;
         color: #333;
     }
-    .form-group-mobile input {
+    .form-group-mobile input, .form-group-mobile select {
         width: 100%;
         padding: 12px;
         border: 1px solid #ddd;
@@ -279,6 +279,12 @@
     .desktop-table {
         display: none;
     }
+    /* Crypto chip styles */
+    .crypto-chip-group { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+    .crypto-chip { display:inline-flex; align-items:center; background:#f1f3f5; border-radius:20px; padding:6px 10px; cursor:pointer; border:1px solid transparent; }
+    .crypto-chip input { display:none; }
+    .crypto-chip .chip-label { font-weight:600; color:#333; }
+    .crypto-chip input:checked + .chip-label { background:#28a745; padding:6px 10px; border-radius:16px; color:#fff; }
     @media (min-width: 1024px) {
         .mobile-cards {
             display: none;
@@ -347,7 +353,6 @@
 
 <button class="add-button" onclick="showAddForm()">+</button>
 
-<!-- フォームオーバーレイ -->
 <div class="form-overlay" id="formOverlay">
     <div class="form-modal">
         <button class="form-close" onclick="hideAddForm()">×</button>
@@ -357,7 +362,18 @@
             
             <div class="form-group-mobile">
                 <label>{{ info.symbol_label }}</label>
-                <input type="text" name="symbol" placeholder="{{ info.symbol_label }}" required>
+                {% if asset_type == 'crypto' %}
+                <div class="crypto-chip-group">
+                    {% for symbol in crypto_symbols %}
+                    <label class="crypto-chip">
+                        <input type="radio" name="symbol" value="{{ symbol }}" {% if loop.first %}checked{% endif %}>
+                        <span class="chip-label">{{ symbol }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <input type="text" id="symbol" name="symbol" placeholder="{{ info.symbol_label }}" required>
+                {% endif %}
             </div>
             
             {% if asset_type not in ['cash'] %}
@@ -390,7 +406,6 @@
 </div>
 
 {% if assets %}
-<!-- モバイル用カード表示 -->
 <div class="mobile-cards">
     {% for asset in assets %}
     <div class="stock-card">
@@ -471,7 +486,6 @@
     {% endfor %}
 </div>
 
-<!-- デスクトップ用テーブル表示 -->
 <table class="desktop-table">
     <thead>
         <tr>
