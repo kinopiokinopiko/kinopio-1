@@ -4,78 +4,231 @@
 
 {% block extra_styles %}
 <style>
+    .header-container {
+        background: white;
+        padding: 20px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    .header-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    .header-top h1 {
+        margin: 0;
+        font-size: 24px;
+        color: #333;
+    }
+    .logout-btn-small {
+        background: #6c757d;
+        color: white;
+        padding: 8px 16px;
+        text-decoration: none;
+        border-radius: 6px;
+        font-size: 13px;
+        border: none;
+        cursor: pointer;
+        transition: background 0.3s;
+    }
+    .logout-btn-small:hover {
+        background: #5a6268;
+    }
+    .user-info {
+        color: #666;
+        font-size: 14px;
+        margin-bottom: 10px;
+    }
+    .rate-info {
+        color: #666;
+        font-size: 13px;
+        margin-bottom: 15px;
+    }
+    
+    /* 総資産カード */
+    .total-assets-card {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 25px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        text-align: center;
+    }
+    .total-assets-label {
+        font-size: 16px;
+        opacity: 0.9;
+        margin-bottom: 8px;
+        font-weight: 500;
+    }
+    .total-assets-value {
+        font-size: 42px;
+        font-weight: bold;
+        margin-bottom: 15px;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        letter-spacing: -1px;
+    }
+    .total-profit {
+        font-size: 22px;
+        font-weight: bold;
+        padding: 10px 20px;
+        background: rgba(255,255,255,0.25);
+        border-radius: 25px;
+        display: inline-block;
+    }
+    .total-profit.profit-red {
+        color: #fff;
+    }
+    .total-profit.profit-green {
+        color: #fff;
+    }
+    
+    .update-all-btn {
+        width: 100%;
+        background: #007bff;
+        color: white;
+        padding: 14px;
+        border: none;
+        border-radius: 8px;
+        font-size: 15px;
+        font-weight: 500;
+        cursor: pointer;
+        margin-bottom: 20px;
+        transition: background 0.3s;
+    }
+    .update-all-btn:hover {
+        background: #0056b3;
+    }
+    
+    /* 資産カードグリッド */
     .asset-grid { 
         display: grid; 
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
-        gap: 20px; 
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
         margin: 20px 0; 
     }
     .asset-card { 
         background: white; 
-        padding: 20px; 
-        border-radius: 8px; 
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+        padding: 18px; 
+        border-radius: 12px; 
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .asset-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
     .asset-card h3 { 
-        margin: 0 0 10px 0; 
-        color: #333; 
+        margin: 0 0 12px 0; 
+        color: #333;
+        font-size: 15px;
+        font-weight: 600;
     }
     .asset-value { 
-        font-size: 24px; 
+        font-size: 26px; 
         font-weight: bold; 
-        color: #007bff; 
+        color: #007bff;
+        margin-bottom: 6px;
     }
-    .total-card { 
-        background: #28a745; 
-        color: white; 
-        grid-column: 1 / -1; 
-        text-align: center; 
-    }
-    .total-card .asset-value {
-        color: white;
-    }
-    .rate-info { 
-        color: #666; 
-        font-size: 14px; 
-        margin: 10px 0; 
+    .asset-count {
+        color: #666;
+        font-size: 13px;
+        margin-bottom: 10px;
     }
     .profit-info {
-        margin-top: 8px;
-        font-size: 14px;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #f0f0f0;
     }
-    .profit {
-        color: #28a745;
-        font-weight: bold;
-    }
-    .loss {
+    .profit-red {
         color: #dc3545;
         font-weight: bold;
+        font-size: 15px;
     }
-    .total-profit {
-        font-size: 16px;
-        margin-top: 10px;
+    .profit-green {
+        color: #28a745;
+        font-weight: bold;
+        font-size: 15px;
     }
-    .total-profit .profit,
-    .total-profit .loss {
+    
+    /* ナビゲーションボタン */
+    .nav-links { 
+        margin: 20px 0;
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+    .nav-links a { 
+        display: block;
+        padding: 14px;
+        background: #007bff;
         color: white;
+        text-decoration: none;
+        border-radius: 8px;
+        font-size: 15px;
+        font-weight: 500;
+        text-align: center;
+        transition: background 0.3s;
+    }
+    .nav-links a:hover { 
+        background: #0056b3;
+    }
+    
+    @media (max-width: 768px) {
+        .header-top h1 {
+            font-size: 20px;
+        }
+        .total-assets-value {
+            font-size: 36px;
+        }
+        .total-profit {
+            font-size: 20px;
+        }
+        .asset-value {
+            font-size: 22px;
+        }
+        .asset-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    
+    @media (min-width: 769px) {
+        .asset-grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="header">
-    <h1>資産ダッシュボード
-        <span class="user-info">
-            {{ username }} さん
-            <a href="{{ url_for('logout') }}" class="nav-links logout-btn" style="margin: 0 0 0 10px;">ログアウト</a>
-        </span>
-    </h1>
+<div class="header-container">
+    <div class="header-top">
+        <h1>資産ダッシュボード</h1>
+        <a href="{{ url_for('logout') }}" class="logout-btn-small">ログアウト</a>
+    </div>
+    <div class="user-info">{{ username }} さん</div>
     <div class="rate-info">USD/JPY: {{ "{:.2f}".format(usd_jpy) }} 円</div>
-    <form method="post" action="{{ url_for('update_all_prices') }}" style="display: inline;">
-        <button type="submit" class="update-btn" onclick="return confirm('全ての価格を更新しますか？時間がかかる場合があります。')">全価格更新</button>
-    </form>
 </div>
 
+<!-- 総資産カード -->
+<div class="total-assets-card">
+    <div class="total-assets-label">総資産</div>
+    <div class="total-assets-value">{{ "{:,.0f}".format(total_assets) }} 円</div>
+    <div class="total-profit {% if total_profit >= 0 %}profit-red{% else %}profit-green{% endif %}">
+        {% if total_profit >= 0 %}+{% endif %}{{ "{:,.0f}".format(total_profit) }} 円
+    </div>
+</div>
+
+<!-- 全価格更新ボタン -->
+<form method="post" action="{{ url_for('update_all_prices') }}" style="margin: 0;">
+    <button type="submit" class="update-all-btn" onclick="return confirm('全ての価格を更新しますか？時間がかかる場合があります。')">
+        全価格更新
+    </button>
+</form>
+
+<!-- ナビゲーションボタン -->
 <div class="nav-links">
     <a href="{{ url_for('manage_assets', asset_type='jp_stock') }}">日本株</a>
     <a href="{{ url_for('manage_assets', asset_type='us_stock') }}">米国株</a>
@@ -83,61 +236,44 @@
     <a href="{{ url_for('manage_assets', asset_type='gold') }}">金</a>
 </div>
 
+<!-- 資産カードグリッド -->
 <div class="asset-grid">
     <div class="asset-card">
         <h3>日本株</h3>
         <div class="asset-value">{{ "{:,.0f}".format(jp_total) }} 円</div>
-        <div>{{ jp_stocks|length }} 銘柄</div>
+        <div class="asset-count">{{ jp_stocks|length }} 銘柄</div>
         <div class="profit-info">
-            {% if jp_profit >= 0 %}
-                <span class="profit">+{{ "{:,.0f}".format(jp_profit) }} 円</span>
-            {% else %}
-                <span class="loss">{{ "{:,.0f}".format(jp_profit) }} 円</span>
-            {% endif %}
+            <span class="{% if jp_profit >= 0 %}profit-red{% else %}profit-green{% endif %}">
+                {% if jp_profit >= 0 %}+{% endif %}{{ "{:,.0f}".format(jp_profit) }} 円
+            </span>
         </div>
     </div>
     
     <div class="asset-card">
         <h3>米国株</h3>
         <div class="asset-value">{{ "{:,.0f}".format(us_total_jpy) }} 円</div>
-        <div>${{ "{:,.2f}".format(us_total_usd) }} ({{ us_stocks|length }} 銘柄)</div>
+        <div class="asset-count">${{ "{:,.2f}".format(us_total_usd) }} ({{ us_stocks|length }} 銘柄)</div>
         <div class="profit-info">
-            {% if us_profit_jpy >= 0 %}
-                <span class="profit">+{{ "{:,.0f}".format(us_profit_jpy) }} 円</span>
-            {% else %}
-                <span class="loss">{{ "{:,.0f}".format(us_profit_jpy) }} 円</span>
-            {% endif %}
+            <span class="{% if us_profit_jpy >= 0 %}profit-red{% else %}profit-green{% endif %}">
+                {% if us_profit_jpy >= 0 %}+{% endif %}{{ "{:,.0f}".format(us_profit_jpy) }} 円
+            </span>
         </div>
     </div>
     
     <div class="asset-card">
         <h3>現金</h3>
         <div class="asset-value">{{ "{:,.0f}".format(cash_total) }} 円</div>
-        <div>{{ cash_items|length }} 項目</div>
+        <div class="asset-count">{{ cash_items|length }} 項目</div>
     </div>
     
     <div class="asset-card">
         <h3>金 (Gold)</h3>
         <div class="asset-value">{{ "{:,.0f}".format(gold_total) }} 円</div>
-        <div>{{ gold_items|length }} 項目</div>
+        <div class="asset-count">{{ gold_items|length }} 項目</div>
         <div class="profit-info">
-            {% if gold_profit >= 0 %}
-                <span class="profit">+{{ "{:,.0f}".format(gold_profit) }} 円</span>
-            {% else %}
-                <span class="loss">{{ "{:,.0f}".format(gold_profit) }} 円</span>
-            {% endif %}
-        </div>
-    </div>
-    
-    <div class="asset-card total-card">
-        <h3>総資産</h3>
-        <div class="asset-value">{{ "{:,.0f}".format(total_assets) }} 円</div>
-        <div class="profit-info total-profit">
-            {% if total_profit >= 0 %}
-                <span class="profit">+{{ "{:,.0f}".format(total_profit) }} 円</span>
-            {% else %}
-                <span class="loss">{{ "{:,.0f}".format(total_profit) }} 円</span>
-            {% endif %}
+            <span class="{% if gold_profit >= 0 %}profit-red{% else %}profit-green{% endif %}">
+                {% if gold_profit >= 0 %}+{% endif %}{{ "{:,.0f}".format(gold_profit) }} 円
+            </span>
         </div>
     </div>
 </div>
