@@ -192,7 +192,7 @@
 
 <div class="asset-grid">
     <a href="{{ url_for('manage_assets', asset_type='jp_stock') }}" class="asset-card">
-        <div class="card-icon" style="background: #e8f5e9;">📊</div>
+        <div class="card-icon" style="background: #e8f5e9;">🇯🇵</div>
         <div class="card-name">日本株</div>
         <div class="card-amount">¥{{ "{:,.0f}".format(jp_total) }}</div>
         <div class="card-detail">{{ jp_stocks|length }} 銘柄</div>
@@ -235,6 +235,16 @@
         <div class="card-detail">{{ crypto_items|length }} 項目</div>
         <div class="card-profit {% if crypto_profit >= 0 %}profit-plus{% else %}profit-minus{% endif %}">
             {% if crypto_profit >= 0 %}+{% endif %}¥{{ "{:,.0f}".format(crypto_profit) }}
+        </div>
+    </a>
+
+    <a href="{{ url_for('manage_assets', asset_type='investment_trust') }}" class="asset-card">
+        <div class="card-icon" style="background: #e0f2f1;">📈</div>
+        <div class="card-name">投資信託</div>
+        <div class="card-amount">¥{{ "{:,.0f}".format(investment_trust_total) }}</div>
+        <div class="card-detail">{{ investment_trust_items|length }} 銘柄</div>
+        <div class="card-profit {% if investment_trust_profit >= 0 %}profit-plus{% else %}profit-minus{% endif %}">
+            {% if investment_trust_profit >= 0 %}+{% endif %}¥{{ "{:,.0f}".format(investment_trust_profit) }}
         </div>
     </a>
 </div>
