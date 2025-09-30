@@ -513,11 +513,98 @@ def logout():
     flash('ログアウトしました', 'success')
     return redirect(url_for('login'))
 
+# ... (imports and other code) ...
+
 @app.route('/dashboard')
 def dashboard():
     user = get_current_user()
     if not user:
         return redirect(url_for('login'))
+    
+    conn = get_db()
+    c = conn.cursor()
+    
+    if USE_POSTGRES:
+        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
+                    WHERE user_id = %s AND asset_type = %s''', (user['id'], 'jp_stock'))
+        jp_stocks = c.fetchall()
+        
+        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
+                    WHERE user_id = %s AND asset_type = %s''', (user['id'], 'us_stock'))
+        us_stocks = c.fetchall()
+        
+        c.execute('''SELECT symbol as label, quantity as amount FROM assets 
+                    WHERE user_id = %s AND asset_type = %s''', (user['id'], 'cash'))
+        cash_items = c.fetchall()
+        
+        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
+                    WHERE user_id = %s AND asset_type = %s''', (user['id'], 'gold'))
+        gold_items = c.fetchall()
+        
+        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
+                    WHERE user_id = %s AND asset_type = %s''', (user['id'], 'crypto'))
+        crypto_items = c.fetchall()
+    else:
+        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
+                    WHERE user_id = ? AND asset_type = "jp_stock"''', (user['id'],))
+        jp_stocks = c.fetchall()
+        
+        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
+                    WHERE user_id = ? AND asset_type = "us_stock"''', (user['id'],))
+        us_stocks = c.fetchall()
+        
+        c.execute('''SELECT symbol as label, quantity as amount FROM assets 
+                    WHERE user_id = ? AND asset_type = "cash"''', (user['id'],))
+        cash_items = c.fetchall()
+        
+        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
+                    WHERE user_id = ? AND asset_type = "gold"''', (user['id'],))
+        gold_items = c.fetchall()
+        
+        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
+                    WHERE user_id = ? AND asset_type = "crypto"''', (user['id'],))
+        crypto_items = c.fetchall()
+    
+    conn.close()
+    
+    # 合計計算
+    jp_total = sum(stock['quantity'] * stock['price'] for stock in jp_stocks)
+    jp_cost_total = sum(stock['quantity'] * stock['avg_cost'] for stock in jp_stocks)
+    jp_profit = jp_total - jp_cost_total
+    
+    us_total_usd = sum(stock['quantity'] * stock['price'] for stock in us_stocks)
+    us_cost_total_usd = sum(stock['quantity'] * stock['avg_cost'] for stock in us_stocks)
+    us_profit_usd = us_total_usd - us_cost_total_usd
+    usd_jpy = get_usd_jpy_rate()
+    us_total_jpy = us_total_usd * usd_jpy
+    us_profit_jpy = us_profit_usd * usd_jpy
+    
+    cash_total = sum(item['amount'] for item in cash_items)
+    
+    gold_total = sum(item['quantity'] * item['price'] for item in gold_items)
+    gold_cost_total = sum(item['quantity'] * item['avg_cost'] for item in gold_items)
+    gold_profit = gold_total - gold_cost_total
+    
+    crypto_total = sum(item['quantity'] * item['price'] for item in crypto_items)
+    crypto_cost_total = sum(item['quantity'] * item['avg_cost'] for item in crypto_items)
+    crypto_profit = crypto_total - crypto_cost_total
+    
+    total_assets = jp_total + us_total_jpy + cash_total + gold_total + crypto_total
+    total_cost = jp_cost_total + (us_cost_total_usd * usd_jpy) + cash_total + gold_cost_total + crypto_cost_total
+    total_profit = total_assets - total_cost
+    
+    return render_template('dashboard.html', 
+                         jp_stocks=jp_stocks, us_stocks=us_stocks, 
+                         cash_items=cash_items, gold_items=gold_items, crypto_items=crypto_items,
+                         jp_total=jp_total, jp_profit=jp_profit,
+                         us_total_usd=us_total_usd, us_total_jpy=us_total_jpy, 
+                         us_profit_usd=us_profit_usd, us_profit_jpy=us_profit_jpy,
+                         cash_total=cash_total, gold_total=gold_total, 
+                         gold_profit=gold_profit,
+                         crypto_total=crypto_total, crypto_profit=crypto_profit,
+                         total_assets=total_assets, total_profit=total_profit, 
+                         usd_jpy=usd_jpy,
+                         user_name=session.get('username', '')) # Changed this line
     
     conn = get_db()
     c = conn.cursor()
