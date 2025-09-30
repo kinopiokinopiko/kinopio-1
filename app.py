@@ -21,6 +21,15 @@ except ImportError:
 # 暗号通貨銘柄（固定）
 CRYPTO_SYMBOLS = ['BTC', 'ETH', 'XRP', 'DOGE']
 
+# 投資信託銘柄（固定）
+INVESTMENT_TRUST_INFO = {
+    'S&P500': 'https://www.rakuten-sec.co.jp/web/fund/detail/?ID=JP90C000GKC6',
+    'オルカン': 'https://www.rakuten-sec.co.jp/web/fund/detail/?ID=JP90C000H1T1',
+    'FANG+': 'https://www.rakuten-sec.co.jp/web/fund/detail/?ID=JP90C000FZD4'
+}
+INVESTMENT_TRUST_SYMBOLS = list(INVESTMENT_TRUST_INFO.keys())
+
+
 # デバッグフラグ（環境変数で有効化可能）
 DEBUG_CRYPTO = os.environ.get('CRYPTO_DEBUG', '0') == '1'
 
@@ -402,6 +411,54 @@ def get_gold_price():
         print(f"Error getting gold price: {e}")
         return 0
 
+def get_investment_trust_price(symbol):
+    """楽天証券から投資信託の基準価額を取得"""
+    if symbol not in INVESTMENT_TRUST_INFO:
+        print(f"Unsupported investment trust symbol: {symbol}")
+        return 0.0
+
+    url = INVESTMENT_TRUST_INFO[symbol]
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.encoding = response.apparent_encoding
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # === ▼▼▼ ここからが修正箇所です ▼▼▼ ===
+        # 「基準価額」というテキストを含むテーブルヘッダー(th)を探す
+        th = soup.find('th', string=re.compile(r'\s*基準価額\s*'))
+        
+        if th:
+            # thの直後にあるテーブルデータ(td)要素を取得
+            td = th.find_next_sibling('td')
+            if td:
+                # td要素からテキストをすべて取得する (例: "36,175 円 前日比 +15円")
+                price_text = td.get_text(strip=True)
+                
+                # 既存の数値抽出関数を使って、テキストから最初の数値を抜き出す
+                price = extract_number_from_string(price_text)
+                
+                if price is not None:
+                    # 抽出した数値を返す
+                    return price
+        # === ▲▲▲ ここまでが修正箇所です ▲▲▲ ===
+
+        # 上記の方法で取得できなかった場合のエラー表示
+        print(f"Could not find the price for {symbol} on the page. The website structure may have changed.")
+        return 0.0
+
+    except Exception as e:
+        print(f"Error scraping investment trust price for {symbol}: {e}")
+        return 0.0
+
+    except Exception as e:
+        print(f"Error scraping investment trust price for {symbol}: {e}")
+        return 0.0
+
+
 def get_usd_jpy_rate():
     """USD/JPY レートを取得"""
     try:
@@ -513,8 +570,6 @@ def logout():
     flash('ログアウトしました', 'success')
     return redirect(url_for('login'))
 
-# ... (imports and other code) ...
-
 @app.route('/dashboard')
 def dashboard():
     user = get_current_user()
@@ -524,172 +579,86 @@ def dashboard():
     conn = get_db()
     c = conn.cursor()
     
-    if USE_POSTGRES:
-        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
-                    WHERE user_id = %s AND asset_type = %s''', (user['id'], 'jp_stock'))
-        jp_stocks = c.fetchall()
+    asset_types = ['jp_stock', 'us_stock', 'cash', 'gold', 'crypto', 'investment_trust']
+    assets = {}
+
+    for asset_type in asset_types:
+        if USE_POSTGRES:
+            c.execute('''SELECT * FROM assets WHERE user_id = %s AND asset_type = %s''', 
+                      (user['id'], asset_type))
+        else:
+            c.execute('''SELECT * FROM assets WHERE user_id = ? AND asset_type = ?''', 
+                      (user['id'], asset_type))
+        assets[asset_type] = c.fetchall()
         
-        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
-                    WHERE user_id = %s AND asset_type = %s''', (user['id'], 'us_stock'))
-        us_stocks = c.fetchall()
-        
-        c.execute('''SELECT symbol as label, quantity as amount FROM assets 
-                    WHERE user_id = %s AND asset_type = %s''', (user['id'], 'cash'))
-        cash_items = c.fetchall()
-        
-        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
-                    WHERE user_id = %s AND asset_type = %s''', (user['id'], 'gold'))
-        gold_items = c.fetchall()
-        
-        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
-                    WHERE user_id = %s AND asset_type = %s''', (user['id'], 'crypto'))
-        crypto_items = c.fetchall()
-    else:
-        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
-                    WHERE user_id = ? AND asset_type = "jp_stock"''', (user['id'],))
-        jp_stocks = c.fetchall()
-        
-        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
-                    WHERE user_id = ? AND asset_type = "us_stock"''', (user['id'],))
-        us_stocks = c.fetchall()
-        
-        c.execute('''SELECT symbol as label, quantity as amount FROM assets 
-                    WHERE user_id = ? AND asset_type = "cash"''', (user['id'],))
-        cash_items = c.fetchall()
-        
-        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
-                    WHERE user_id = ? AND asset_type = "gold"''', (user['id'],))
-        gold_items = c.fetchall()
-        
-        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
-                    WHERE user_id = ? AND asset_type = "crypto"''', (user['id'],))
-        crypto_items = c.fetchall()
-    
     conn.close()
     
-    # 合計計算
-    jp_total = sum(stock['quantity'] * stock['price'] for stock in jp_stocks)
-    jp_cost_total = sum(stock['quantity'] * stock['avg_cost'] for stock in jp_stocks)
-    jp_profit = jp_total - jp_cost_total
-    
-    us_total_usd = sum(stock['quantity'] * stock['price'] for stock in us_stocks)
-    us_cost_total_usd = sum(stock['quantity'] * stock['avg_cost'] for stock in us_stocks)
-    us_profit_usd = us_total_usd - us_cost_total_usd
+    # 日本株
+    jp_stocks = assets['jp_stock']
+    jp_total = sum(s['quantity'] * s['price'] for s in jp_stocks)
+    jp_cost = sum(s['quantity'] * s['avg_cost'] for s in jp_stocks)
+    jp_profit = jp_total - jp_cost
+
+    # 米国株
+    us_stocks = assets['us_stock']
     usd_jpy = get_usd_jpy_rate()
+    us_total_usd = sum(s['quantity'] * s['price'] for s in us_stocks)
+    us_cost_usd = sum(s['quantity'] * s['avg_cost'] for s in us_stocks)
+    us_profit_usd = us_total_usd - us_cost_usd
     us_total_jpy = us_total_usd * usd_jpy
     us_profit_jpy = us_profit_usd * usd_jpy
+
+    # 現金
+    cash_items = assets['cash']
+    cash_total = sum(i['quantity'] for i in cash_items)
     
-    cash_total = sum(item['amount'] for item in cash_items)
-    
-    gold_total = sum(item['quantity'] * item['price'] for item in gold_items)
-    gold_cost_total = sum(item['quantity'] * item['avg_cost'] for item in gold_items)
-    gold_profit = gold_total - gold_cost_total
-    
-    crypto_total = sum(item['quantity'] * item['price'] for item in crypto_items)
-    crypto_cost_total = sum(item['quantity'] * item['avg_cost'] for item in crypto_items)
-    crypto_profit = crypto_total - crypto_cost_total
-    
-    total_assets = jp_total + us_total_jpy + cash_total + gold_total + crypto_total
-    total_cost = jp_cost_total + (us_cost_total_usd * usd_jpy) + cash_total + gold_cost_total + crypto_cost_total
-    total_profit = total_assets - total_cost
-    
-    return render_template('dashboard.html', 
-                         jp_stocks=jp_stocks, us_stocks=us_stocks, 
-                         cash_items=cash_items, gold_items=gold_items, crypto_items=crypto_items,
-                         jp_total=jp_total, jp_profit=jp_profit,
-                         us_total_usd=us_total_usd, us_total_jpy=us_total_jpy, 
-                         us_profit_usd=us_profit_usd, us_profit_jpy=us_profit_jpy,
-                         cash_total=cash_total, gold_total=gold_total, 
-                         gold_profit=gold_profit,
-                         crypto_total=crypto_total, crypto_profit=crypto_profit,
-                         total_assets=total_assets, total_profit=total_profit, 
-                         usd_jpy=usd_jpy,
-                         user_name=session.get('username', '')) # Changed this line
-    
-    conn = get_db()
-    c = conn.cursor()
-    
-    if USE_POSTGRES:
-        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
-                    WHERE user_id = %s AND asset_type = %s''', (user['id'], 'jp_stock'))
-        jp_stocks = c.fetchall()
-        
-        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
-                    WHERE user_id = %s AND asset_type = %s''', (user['id'], 'us_stock'))
-        us_stocks = c.fetchall()
-        
-        c.execute('''SELECT symbol as label, quantity as amount FROM assets 
-                    WHERE user_id = %s AND asset_type = %s''', (user['id'], 'cash'))
-        cash_items = c.fetchall()
-        
-        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
-                    WHERE user_id = %s AND asset_type = %s''', (user['id'], 'gold'))
-        gold_items = c.fetchall()
-        
-        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
-                    WHERE user_id = %s AND asset_type = %s''', (user['id'], 'crypto'))
-        crypto_items = c.fetchall()
-    else:
-        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
-                    WHERE user_id = ? AND asset_type = "jp_stock"''', (user['id'],))
-        jp_stocks = c.fetchall()
-        
-        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
-                    WHERE user_id = ? AND asset_type = "us_stock"''', (user['id'],))
-        us_stocks = c.fetchall()
-        
-        c.execute('''SELECT symbol as label, quantity as amount FROM assets 
-                    WHERE user_id = ? AND asset_type = "cash"''', (user['id'],))
-        cash_items = c.fetchall()
-        
-        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
-                    WHERE user_id = ? AND asset_type = "gold"''', (user['id'],))
-        gold_items = c.fetchall()
-        
-        c.execute('''SELECT symbol, name, quantity, price, avg_cost FROM assets 
-                    WHERE user_id = ? AND asset_type = "crypto"''', (user['id'],))
-        crypto_items = c.fetchall()
-    
-    conn.close()
-    
-    # 合計計算
-    jp_total = sum(stock['quantity'] * stock['price'] for stock in jp_stocks)
-    jp_cost_total = sum(stock['quantity'] * stock['avg_cost'] for stock in jp_stocks)
-    jp_profit = jp_total - jp_cost_total
-    
-    us_total_usd = sum(stock['quantity'] * stock['price'] for stock in us_stocks)
-    us_cost_total_usd = sum(stock['quantity'] * stock['avg_cost'] for stock in us_stocks)
-    us_profit_usd = us_total_usd - us_cost_total_usd
-    usd_jpy = get_usd_jpy_rate()
-    us_total_jpy = us_total_usd * usd_jpy
-    us_profit_jpy = us_profit_usd * usd_jpy
-    
-    cash_total = sum(item['amount'] for item in cash_items)
-    
-    gold_total = sum(item['quantity'] * item['price'] for item in gold_items)
-    gold_cost_total = sum(item['quantity'] * item['avg_cost'] for item in gold_items)
-    gold_profit = gold_total - gold_cost_total
-    
-    crypto_total = sum(item['quantity'] * item['price'] for item in crypto_items)
-    crypto_cost_total = sum(item['quantity'] * item['avg_cost'] for item in crypto_items)
-    crypto_profit = crypto_total - crypto_cost_total
-    
-    total_assets = jp_total + us_total_jpy + cash_total + gold_total + crypto_total
-    total_cost = jp_cost_total + (us_cost_total_usd * usd_jpy) + cash_total + gold_cost_total + crypto_cost_total
-    total_profit = total_assets - total_cost
-    
-    return render_template('dashboard.html', 
-                         jp_stocks=jp_stocks, us_stocks=us_stocks, 
-                         cash_items=cash_items, gold_items=gold_items, crypto_items=crypto_items,
-                         jp_total=jp_total, jp_profit=jp_profit,
-                         us_total_usd=us_total_usd, us_total_jpy=us_total_jpy, 
-                         us_profit_usd=us_profit_usd, us_profit_jpy=us_profit_jpy,
-                         cash_total=cash_total, gold_total=gold_total, 
-                         gold_profit=gold_profit,
-                         crypto_total=crypto_total, crypto_profit=crypto_profit,
-                         total_assets=total_assets, total_profit=total_profit, 
-                         usd_jpy=usd_jpy,
-                         username=session.get('username', ''))
+    # 金
+    gold_items = assets['gold']
+    gold_total = sum(i['quantity'] * i['price'] for i in gold_items)
+    gold_cost = sum(i['quantity'] * i['avg_cost'] for i in gold_items)
+    gold_profit = gold_total - gold_cost
+
+    # 暗号資産
+    crypto_items = assets['crypto']
+    crypto_total = sum(i['quantity'] * i['price'] for i in crypto_items)
+    crypto_cost = sum(i['quantity'] * i['avg_cost'] for i in crypto_items)
+    crypto_profit = crypto_total - crypto_cost
+
+    # 投資信託
+    investment_trust_items = assets['investment_trust']
+    it_total = sum((i['quantity'] * i['price'] / 10000) for i in investment_trust_items)
+    it_cost = sum((i['quantity'] * i['avg_cost'] / 10000) for i in investment_trust_items)
+    it_profit = it_total - it_cost
+
+    # 全資産合計
+    total_assets = jp_total + us_total_jpy + cash_total + gold_total + crypto_total + it_total
+    total_profit = jp_profit + us_profit_jpy + gold_profit + crypto_profit + it_profit
+
+    return render_template(
+        'dashboard.html', 
+        user_name=session.get('username', ''),
+        jp_stocks=jp_stocks,
+        jp_total=jp_total,
+        jp_profit=jp_profit,
+        us_stocks=us_stocks,
+        us_total_usd=us_total_usd,
+        us_total_jpy=us_total_jpy,
+        us_profit_jpy=us_profit_jpy,
+        cash_items=cash_items,
+        cash_total=cash_total,
+        gold_items=gold_items,
+        gold_total=gold_total,
+        gold_profit=gold_profit,
+        crypto_items=crypto_items,
+        crypto_total=crypto_total,
+        crypto_profit=crypto_profit,
+        investment_trust_items=investment_trust_items,
+        investment_trust_total=it_total,
+        investment_trust_profit=it_profit,
+        total_assets=total_assets,
+        total_profit=total_profit
+    )
+
 
 @app.route('/assets/<asset_type>')
 def manage_assets(asset_type):
@@ -715,15 +684,20 @@ def manage_assets(asset_type):
         'us_stock': {'title': '米国株', 'symbol_label': 'シンボル', 'quantity_label': '株数'},
         'gold': {'title': '金 (Gold)', 'symbol_label': '種類', 'quantity_label': '重量(g)'},
         'cash': {'title': '現金', 'symbol_label': '項目名', 'quantity_label': '金額'},
-        'crypto': {'title': '暗号資産', 'symbol_label': '銘柄', 'quantity_label': '数量'}
+        'crypto': {'title': '暗号資産', 'symbol_label': '銘柄', 'quantity_label': '数量'},
+        'investment_trust': {'title': '投資信託', 'symbol_label': '銘柄', 'quantity_label': '保有数量(口)'}
     }
     
     info = type_info.get(asset_type, type_info['jp_stock'])
     
-    # crypto用の選択肢をテンプレートに渡す（プルダウンチップに使う）
-    crypto_symbols = CRYPTO_SYMBOLS
-    
-    return render_template('manage_assets.html', assets=assets, asset_type=asset_type, info=info, crypto_symbols=crypto_symbols)
+    return render_template(
+        'manage_assets.html', 
+        assets=assets, 
+        asset_type=asset_type, 
+        info=info, 
+        crypto_symbols=CRYPTO_SYMBOLS,
+        investment_trust_symbols=INVESTMENT_TRUST_SYMBOLS
+    )
 
 @app.route('/add_asset', methods=['POST'])
 def add_asset():
@@ -732,8 +706,10 @@ def add_asset():
         return redirect(url_for('login'))
     
     asset_type = request.form['asset_type']
-    # symbolは暗号資産だとプルダウン（ラジオ）で渡る想定。既存CSV入力等にも対応。
-    symbol = request.form['symbol'].strip().upper()
+    symbol = request.form['symbol'].strip()
+    if asset_type in ['us_stock', 'crypto']:
+        symbol = symbol.upper()
+
     name = request.form.get('name', '').strip()
     quantity = float(request.form['quantity'])
     avg_cost = float(request.form.get('avg_cost', 0)) if request.form.get('avg_cost') else 0
@@ -741,21 +717,25 @@ def add_asset():
     price = 0
     if asset_type == 'gold':
         price = get_gold_price()
-        if not name:
-            name = "金 (Gold)"
+        if not name: name = "金 (Gold)"
     elif asset_type == 'crypto':
-        # 暗号資産は限定銘柄のみ受け付ける
         if symbol not in CRYPTO_SYMBOLS:
             flash('対応していない暗号資産です', 'error')
             return redirect(url_for('manage_assets', asset_type='crypto'))
         price = get_crypto_price(symbol)
         name = name or symbol
+    elif asset_type == 'investment_trust':
+        if symbol not in INVESTMENT_TRUST_SYMBOLS:
+            flash('対応していない投資信託です', 'error')
+            return redirect(url_for('manage_assets', asset_type='investment_trust'))
+        price = get_investment_trust_price(symbol)
+        name = name or symbol
     elif asset_type != 'cash':
         is_jp = (asset_type == 'jp_stock')
         try:
-            price = get_stock_price(symbol, is_jp)
-            if not name:
-                name = get_stock_name(symbol, is_jp)
+            stock_info = get_jp_stock_info(symbol) if is_jp else get_us_stock_info(symbol)
+            price = stock_info['price']
+            if not name: name = stock_info['name']
         except Exception as e:
             flash(f'価格取得に失敗しました: {symbol}', 'error')
             price = 0
@@ -776,32 +756,37 @@ def add_asset():
     existing = c.fetchone()
     
     if existing and asset_type != 'cash':
-        old_quantity = existing['quantity']
-        old_avg_cost = existing['avg_cost']
+        # 既存アセットに数量を追加する場合
+        old_quantity = existing['quantity'] or 0
+        old_avg_cost = existing['avg_cost'] or 0
         new_total_quantity = old_quantity + quantity
         
         if new_total_quantity > 0 and avg_cost > 0:
+            # 加重平均で新しい平均取得単価を計算
             new_avg_cost = ((old_quantity * old_avg_cost) + (quantity * avg_cost)) / new_total_quantity
         else:
             new_avg_cost = old_avg_cost if old_avg_cost > 0 else avg_cost
         
+        update_name = name if name else existing.get('name', symbol)
+
         if USE_POSTGRES:
             c.execute('''UPDATE assets SET quantity = %s, price = %s, name = %s, avg_cost = %s
-                        WHERE id = %s''', (new_total_quantity, price, name, new_avg_cost, existing['id']))
+                        WHERE id = %s''', (new_total_quantity, price, update_name, new_avg_cost, existing['id']))
         else:
             c.execute('''UPDATE assets SET quantity = ?, price = ?, name = ?, avg_cost = ?
-                        WHERE id = ?''', (new_total_quantity, price, name, new_avg_cost, existing['id']))
+                        WHERE id = ?''', (new_total_quantity, price, update_name, new_avg_cost, existing['id']))
         
-        flash(f'{symbol} を更新しました（数量: {new_total_quantity}）', 'success')
+        flash(f'{symbol} を更新しました', 'success')
+
     elif existing and asset_type == 'cash':
+        # 現金は単純に上書き
         if USE_POSTGRES:
-            c.execute('''UPDATE assets SET quantity = %s, price = %s, name = %s
-                        WHERE id = %s''', (quantity, price, name, existing['id']))
+            c.execute('''UPDATE assets SET quantity = %s WHERE id = %s''', (quantity, existing['id']))
         else:
-            c.execute('''UPDATE assets SET quantity = ?, price = ?, name = ?
-                        WHERE id = ?''', (quantity, price, name, existing['id']))
+            c.execute('''UPDATE assets SET quantity = ? WHERE id = ?''', (quantity, existing['id']))
         flash(f'{symbol} を更新しました', 'success')
     else:
+        # 新規追加
         if USE_POSTGRES:
             c.execute('''INSERT INTO assets (user_id, asset_type, symbol, name, quantity, price, avg_cost)
                         VALUES (%s, %s, %s, %s, %s, %s, %s)''',
@@ -816,6 +801,7 @@ def add_asset():
     conn.close()
     
     return redirect(url_for('manage_assets', asset_type=asset_type))
+
 
 @app.route('/edit_asset/<int:asset_id>')
 def edit_asset(asset_id):
@@ -843,7 +829,8 @@ def edit_asset(asset_id):
         'us_stock': {'title': '米国株', 'symbol_label': 'シンボル', 'quantity_label': '株数'},
         'gold': {'title': '金 (Gold)', 'symbol_label': '種類', 'quantity_label': '重量(g)'},
         'cash': {'title': '現金', 'symbol_label': '項目名', 'quantity_label': '金額'},
-        'crypto': {'title': '暗号資産', 'symbol_label': '銘柄', 'quantity_label': '数量'}
+        'crypto': {'title': '暗号資産', 'symbol_label': '銘柄', 'quantity_label': '数量'},
+        'investment_trust': {'title': '投資信託', 'symbol_label': '銘柄', 'quantity_label': '保有数量(口)'}
     }
     
     info = type_info.get(asset['asset_type'], type_info['jp_stock'])
@@ -857,7 +844,7 @@ def update_asset():
         return redirect(url_for('login'))
     
     asset_id = request.form['asset_id']
-    symbol = request.form['symbol'].strip().upper()
+    symbol = request.form['symbol'].strip()
     name = request.form.get('name', '').strip()
     quantity = float(request.form['quantity'])
     avg_cost = float(request.form.get('avg_cost', 0)) if request.form.get('avg_cost') else 0
@@ -880,26 +867,34 @@ def update_asset():
         return redirect(url_for('dashboard'))
     
     asset_type = asset['asset_type']
-    
+    if asset_type in ['us_stock', 'crypto']:
+        symbol = symbol.upper()
+
+    # 価格取得ロジックは add_asset と同様
     price = 0
     if asset_type == 'gold':
         price = get_gold_price()
-        if not name:
-            name = "金 (Gold)"
+        if not name: name = "金 (Gold)"
     elif asset_type == 'crypto':
         if symbol not in CRYPTO_SYMBOLS:
             flash('対応していない暗号資産です', 'error')
             conn.close()
             return redirect(url_for('manage_assets', asset_type='crypto'))
         price = get_crypto_price(symbol)
-        if not name:
-            name = symbol
+        if not name: name = symbol
+    elif asset_type == 'investment_trust':
+        if symbol not in INVESTMENT_TRUST_SYMBOLS:
+            flash('対応していない投資信託です', 'error')
+            conn.close()
+            return redirect(url_for('manage_assets', asset_type='investment_trust'))
+        price = get_investment_trust_price(symbol)
+        if not name: name = symbol
     elif asset_type != 'cash':
         is_jp = (asset_type == 'jp_stock')
         try:
-            price = get_stock_price(symbol, is_jp)
-            if not name:
-                name = get_stock_name(symbol, is_jp)
+            stock_info = get_jp_stock_info(symbol) if is_jp else get_us_stock_info(symbol)
+            price = stock_info['price']
+            if not name: name = stock_info['name']
         except Exception as e:
             flash(f'価格取得に失敗しました: {symbol}', 'error')
             price = 0
@@ -961,10 +956,12 @@ def delete_asset():
 def update_prices():
     user = get_current_user()
     if not user:
-        return redirect(url_for('login'))
+        return ('Unauthorized', 401)
     
-    asset_type = request.form['asset_type']
-    
+    asset_type = request.form.get('asset_type')
+    if not asset_type:
+        return ('Bad Request', 400)
+
     if asset_type == 'cash':
         return 'OK'
     
@@ -978,49 +975,34 @@ def update_prices():
         c.execute('SELECT id, symbol FROM assets WHERE user_id = ? AND asset_type = ?',
                  (user['id'], asset_type))
     
-    assets = c.fetchall()
+    assets_to_update = c.fetchall()
     
-    if asset_type == 'gold':
+    update_funcs = {
+        'gold': get_gold_price,
+        'crypto': get_crypto_price,
+        'jp_stock': lambda symbol: get_stock_price(symbol, is_jp=True),
+        'us_stock': lambda symbol: get_stock_price(symbol, is_jp=False),
+        'investment_trust': get_investment_trust_price
+    }
+
+    price_func = update_funcs.get(asset_type)
+    if not price_func:
+        conn.close()
+        return ('Invalid asset type', 400)
+
+    for asset in assets_to_update:
         try:
-            gold_price = get_gold_price()
-            for asset in assets:
-                if USE_POSTGRES:
-                    c.execute('UPDATE assets SET price = %s WHERE id = %s', (gold_price, asset['id']))
-                else:
-                    c.execute('UPDATE assets SET price = ? WHERE id = ?', (gold_price, asset['id']))
-                time.sleep(0.5)
-        except Exception as e:
-            print(f"Error updating gold price: {e}")
-    elif asset_type == 'crypto':
-        for asset in assets:
-            try:
-                crypto_price = get_crypto_price(asset['symbol'])
-                if DEBUG_CRYPTO:
-                    print(f"[DEBUG] Updating {asset['symbol']} price to {crypto_price}")
-                if USE_POSTGRES:
-                    c.execute('UPDATE assets SET price = %s WHERE id = %s', (crypto_price, asset['id']))
-                else:
-                    c.execute('UPDATE assets SET price = ? WHERE id = ?', (crypto_price, asset['id']))
-                conn.commit()  # 各更新後にコミット
-                time.sleep(0.5)  # APIレート制限を考慮
-            except Exception as e:
-                print(f"Error updating crypto price for {asset['symbol']}: {e}")
-                if DEBUG_CRYPTO:
-                    import traceback
-                    traceback.print_exc()
-    else:
-        is_jp = (asset_type == 'jp_stock')
-        for asset in assets:
-            try:
-                price = get_stock_price(asset['symbol'], is_jp)
+            # gold は symbol を引数に取らないので場合分け
+            price = price_func() if asset_type == 'gold' else price_func(asset['symbol'])
+            if price is not None and price > 0:
                 if USE_POSTGRES:
                     c.execute('UPDATE assets SET price = %s WHERE id = %s', (price, asset['id']))
                 else:
                     c.execute('UPDATE assets SET price = ? WHERE id = ?', (price, asset['id']))
-                time.sleep(1)
-            except Exception as e:
-                print(f"Failed to update {asset['symbol']}: {e}")
-    
+            time.sleep(0.5)  # レート制限対策
+        except Exception as e:
+            print(f"Failed to update price for {asset['symbol']} ({asset_type}): {e}")
+            
     conn.commit()
     conn.close()
     
@@ -1031,93 +1013,44 @@ def update_all_prices():
     user = get_current_user()
     if not user:
         return redirect(url_for('login'))
-    
+
     conn = get_db()
     c = conn.cursor()
-    
-    # 日本株の価格更新
-    if USE_POSTGRES:
-        c.execute('SELECT id, symbol FROM assets WHERE user_id = %s AND asset_type = %s',
-                 (user['id'], 'jp_stock'))
-    else:
-        c.execute('SELECT id, symbol FROM assets WHERE user_id = ? AND asset_type = "jp_stock"',
-                 (user['id'],))
-    
-    jp_assets = c.fetchall()
-    
-    for asset in jp_assets:
-        try:
-            price = get_stock_price(asset['symbol'], True)
-            if USE_POSTGRES:
-                c.execute('UPDATE assets SET price = %s WHERE id = %s', (price, asset['id']))
-            else:
-                c.execute('UPDATE assets SET price = ? WHERE id = ?', (price, asset['id']))
-            time.sleep(1)
-        except:
-            pass
-    
-    # 米国株の価格更新
-    if USE_POSTGRES:
-        c.execute('SELECT id, symbol FROM assets WHERE user_id = %s AND asset_type = %s',
-                 (user['id'], 'us_stock'))
-    else:
-        c.execute('SELECT id, symbol FROM assets WHERE user_id = ? AND asset_type = "us_stock"',
-                 (user['id'],))
-    
-    us_assets = c.fetchall()
-    
-    for asset in us_assets:
-        try:
-            price = get_stock_price(asset['symbol'], False)
-            if USE_POSTGRES:
-                c.execute('UPDATE assets SET price = %s WHERE id = %s', (price, asset['id']))
-            else:
-                c.execute('UPDATE assets SET price = ? WHERE id = ?', (price, asset['id']))
-            time.sleep(1)
-        except:
-            pass
-    
-    # 金の価格更新
-    if USE_POSTGRES:
-        c.execute('SELECT id FROM assets WHERE user_id = %s AND asset_type = %s',
-                 (user['id'], 'gold'))
-    else:
-        c.execute('SELECT id FROM assets WHERE user_id = ? AND asset_type = "gold"',
-                 (user['id'],))
-    
-    gold_assets = c.fetchall()
-    
-    if gold_assets:
-        try:
-            gold_price = get_gold_price()
-            for asset in gold_assets:
-                if USE_POSTGRES:
-                    c.execute('UPDATE assets SET price = %s WHERE id = %s', (gold_price, asset['id']))
-                else:
-                    c.execute('UPDATE assets SET price = ? WHERE id = ?', (gold_price, asset['id']))
-        except:
-            pass
-            
-    # 暗号資産の価格更新
-    if USE_POSTGRES:
-        c.execute('SELECT id, symbol FROM assets WHERE user_id = %s AND asset_type = %s',
-                 (user['id'], 'crypto'))
-    else:
-        c.execute('SELECT id, symbol FROM assets WHERE user_id = ? AND asset_type = "crypto"',
-                 (user['id'],))
-    
-    crypto_assets = c.fetchall()
-    
-    for asset in crypto_assets:
-        try:
-            price = get_crypto_price(asset['symbol'])
-            if USE_POSTGRES:
-                c.execute('UPDATE assets SET price = %s WHERE id = %s', (price, asset['id']))
-            else:
-                c.execute('UPDATE assets SET price = ? WHERE id = ?', (price, asset['id']))
-            time.sleep(1)
-        except:
-            pass
+
+    asset_types_to_update = ['jp_stock', 'us_stock', 'gold', 'crypto', 'investment_trust']
+
+    for asset_type in asset_types_to_update:
+        if USE_POSTGRES:
+            c.execute('SELECT id, symbol FROM assets WHERE user_id = %s AND asset_type = %s', (user['id'], asset_type))
+        else:
+            c.execute('SELECT id, symbol FROM assets WHERE user_id = ? AND asset_type = ?', (user['id'], asset_type))
+        
+        assets = c.fetchall()
+
+        for asset in assets:
+            price = 0
+            try:
+                if asset_type == 'jp_stock':
+                    price = get_stock_price(asset['symbol'], is_jp=True)
+                elif asset_type == 'us_stock':
+                    price = get_stock_price(asset['symbol'], is_jp=False)
+                elif asset_type == 'gold':
+                    price = get_gold_price()
+                elif asset_type == 'crypto':
+                    price = get_crypto_price(asset['symbol'])
+                elif asset_type == 'investment_trust':
+                    price = get_investment_trust_price(asset['symbol'])
+
+                if price > 0:
+                    if USE_POSTGRES:
+                        c.execute('UPDATE assets SET price = %s WHERE id = %s', (price, asset['id']))
+                    else:
+                        c.execute('UPDATE assets SET price = ? WHERE id = ?', (price, asset['id']))
+                
+                time.sleep(1) # APIへの負荷軽減
+            except Exception as e:
+                print(f"Error updating all prices for {asset['symbol']} ({asset_type}): {e}")
+                pass
     
     conn.commit()
     conn.close()
