@@ -1017,9 +1017,20 @@ def update_all_prices():
     conn = get_db()
     c = conn.cursor()
 
-    asset_types_to_update = ['jp_stock', 'us_stock', 'gold', 'crypto', 'investment_trust']
+    # 価格取得関数を辞書にまとめることで、コードを簡潔にする
+    price_funcs = {
+        'jp_stock': lambda symbol: get_stock_price(symbol, is_jp=True),
+        'us_stock': lambda symbol: get_stock_price(symbol, is_jp=False),
+        'gold': get_gold_price,
+        'crypto': get_crypto_price,
+        'investment_trust': get_investment_trust_price
+    }
+
+    # 更新対象のアセットタイプ
+    asset_types_to_update = list(price_funcs.keys())
 
     for asset_type in asset_types_to_update:
+        # データベースから該当タイプの資産をすべて取得
         if USE_POSTGRES:
             c.execute('SELECT id, symbol FROM assets WHERE user_id = %s AND asset_type = %s', (user['id'], asset_type))
         else:
@@ -1027,30 +1038,32 @@ def update_all_prices():
         
         assets = c.fetchall()
 
+        # 各資産の価格を更新
         for asset in assets:
-            price = 0
             try:
-                if asset_type == 'jp_stock':
-                    price = get_stock_price(asset['symbol'], is_jp=True)
-                elif asset_type == 'us_stock':
-                    price = get_stock_price(asset['symbol'], is_jp=False)
-                elif asset_type == 'gold':
-                    price = get_gold_price()
-                elif asset_type == 'crypto':
-                    price = get_crypto_price(asset['symbol'])
-                elif asset_type == 'investment_trust':
-                    price = get_investment_trust_price(asset['symbol'])
+                price_func = price_funcs[asset_type]
+                
+                # 'gold'は引数が不要なため、呼び出し方を分ける
+                if asset_type == 'gold':
+                    price = price_func()
+                else:
+                    price = price_func(asset['symbol'])
 
-                if price > 0:
+                # 取得した価格が妥当な場合のみDBを更新
+                if price is not None and price > 0:
                     if USE_POSTGRES:
                         c.execute('UPDATE assets SET price = %s WHERE id = %s', (price, asset['id']))
                     else:
                         c.execute('UPDATE assets SET price = ? WHERE id = ?', (price, asset['id']))
                 
-                time.sleep(1) # APIへの負荷軽減
+                # --- ▼ タイムアウト対策 ▼ ---
+                # APIやスクレイピング先に負荷をかけすぎないための待機時間を、元の1秒から0.5秒に短縮
+                time.sleep(0.5) 
+            
             except Exception as e:
-                print(f"Error updating all prices for {asset['symbol']} ({asset_type}): {e}")
-                pass
+                # エラーが発生しても処理を止めず、コンソールにエラー内容を出力して次の資産の更新を試みる
+                print(f"Error updating price for {asset.get('symbol', 'N/A')} ({asset_type}): {e}")
+                continue
     
     conn.commit()
     conn.close()
@@ -1060,4 +1073,5 @@ def update_all_prices():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
+
     app.run(host='0.0.0.0', port=port, debug=False)
