@@ -1,4 +1,4 @@
-Flask==2.3.3
+Flask[async]==2.3.3
 requests==2.31.0
 Werkzeug==2.3.7
 beautifulsoup4==4.12.2
@@ -7,6 +7,7 @@ psycopg2-binary==2.9.9
 lxml==4.9.3
 httpx
 hypercorn
+
 
 
 
