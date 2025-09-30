@@ -9,6 +9,7 @@ import re
 from bs4 import BeautifulSoup
 import time
 from decimal import Decimal, InvalidOperation
+import concurrent.futures
 
 # PostgreSQLサポート
 try:
@@ -1014,64 +1015,71 @@ def update_all_prices():
     if not user:
         return redirect(url_for('login'))
 
+    # --- 1. 更新対象の全資産をDBから取得 ---
     conn = get_db()
     c = conn.cursor()
-
-    # 価格取得関数を辞書にまとめることで、コードを簡潔にする
-    price_funcs = {
-        'jp_stock': lambda symbol: get_stock_price(symbol, is_jp=True),
-        'us_stock': lambda symbol: get_stock_price(symbol, is_jp=False),
-        'gold': get_gold_price,
-        'crypto': get_crypto_price,
-        'investment_trust': get_investment_trust_price
-    }
-
-    # 更新対象のアセットタイプ
-    asset_types_to_update = list(price_funcs.keys())
-
-    for asset_type in asset_types_to_update:
-        # データベースから該当タイプの資産をすべて取得
-        if USE_POSTGRES:
-            c.execute('SELECT id, symbol FROM assets WHERE user_id = %s AND asset_type = %s', (user['id'], asset_type))
-        else:
-            c.execute('SELECT id, symbol FROM assets WHERE user_id = ? AND asset_type = ?', (user['id'], asset_type))
-        
-        assets = c.fetchall()
-
-        # 各資産の価格を更新
-        for asset in assets:
-            try:
-                price_func = price_funcs[asset_type]
-                
-                # 'gold'は引数が不要なため、呼び出し方を分ける
-                if asset_type == 'gold':
-                    price = price_func()
-                else:
-                    price = price_func(asset['symbol'])
-
-                # 取得した価格が妥当な場合のみDBを更新
-                if price is not None and price > 0:
-                    if USE_POSTGRES:
-                        c.execute('UPDATE assets SET price = %s WHERE id = %s', (price, asset['id']))
-                    else:
-                        c.execute('UPDATE assets SET price = ? WHERE id = ?', (price, asset['id']))
-                
-                # --- ▼ タイムアウト対策 ▼ ---
-                # APIやスクレイピング先に負荷をかけすぎないための待機時間を、元の1秒から0.5秒に短縮
-                time.sleep(0.5) 
+    asset_types_to_update = ['jp_stock', 'us_stock', 'gold', 'crypto', 'investment_trust']
+    
+    query_placeholder = ', '.join(['%s'] * len(asset_types_to_update)) if USE_POSTGRES else ', '.join(['?'] * len(asset_types_to_update))
+    
+    if USE_POSTGRES:
+        c.execute(f'SELECT id, symbol, asset_type FROM assets WHERE user_id = %s AND asset_type IN ({query_placeholder})',
+                  [user['id']] + asset_types_to_update)
+    else:
+        c.execute(f'SELECT id, symbol, asset_type FROM assets WHERE user_id = ? AND asset_type IN ({query_placeholder})',
+                  [user['id']] + asset_types_to_update)
+    
+    all_assets = c.fetchall()
+    
+    # --- 2. 各資産の価格を取得する並列処理用の関数を定義 ---
+    def fetch_price(asset):
+        """個々の資産の価格を取得するワーカー関数"""
+        asset_type = asset['asset_type']
+        symbol = asset['symbol']
+        price = 0
+        try:
+            if asset_type == 'jp_stock':
+                price = get_stock_price(symbol, is_jp=True)
+            elif asset_type == 'us_stock':
+                price = get_stock_price(symbol, is_jp=False)
+            elif asset_type == 'gold':
+                price = get_gold_price()
+            elif asset_type == 'crypto':
+                price = get_crypto_price(symbol)
+            elif asset_type == 'investment_trust':
+                price = get_investment_trust_price(symbol)
             
-            except Exception as e:
-                # エラーが発生しても処理を止めず、コンソールにエラー内容を出力して次の資産の更新を試みる
-                print(f"Error updating price for {asset.get('symbol', 'N/A')} ({asset_type}): {e}")
-                continue
+            # 結果を「資産ID」と「価格」のタプルで返す
+            return (asset['id'], price)
+        except Exception as e:
+            print(f"Error in worker for {symbol} ({asset_type}): {e}")
+            return (asset['id'], 0) # エラー時は価格0を返す
+
+    # --- 3. ThreadPoolExecutorで並列処理を実行 ---
+    # max_workersの数だけ同時にリクエストが実行される
+    updated_prices = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        # all_assetsリストの各要素をfetch_price関数に渡し、並列実行
+        results = executor.map(fetch_price, all_assets)
+        # 結果をリストに格納
+        updated_prices = [result for result in results if result and result[1] is not None and result[1] > 0]
+
+    # --- 4. 取得した価格でDBを更新 ---
+    if updated_prices:
+        for asset_id, price in updated_prices:
+            if USE_POSTGRES:
+                c.execute('UPDATE assets SET price = %s WHERE id = %s', (price, asset_id))
+            else:
+                c.execute('UPDATE assets SET price = ? WHERE id = ?', (price, asset_id))
     
     conn.commit()
     conn.close()
     
-    flash('全ての価格を更新しました', 'success')
+    flash(f'全{len(all_assets)}件の資産価格を更新しました（{len(updated_prices)}件成功）', 'success')
     return redirect(url_for('dashboard'))
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
 
     app.run(host='0.0.0.0', port=port, debug=False)
+
