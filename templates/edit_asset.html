@@ -4,52 +4,103 @@
 
 {% block extra_styles %}
 <style>
-    .profit-red {
-        color: #dc3545;
-        font-weight: bold;
+    .header {
+        background: white;
+        padding: 16px;
+        border-radius: 12px;
+        margin-bottom: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
-    .profit-green {
-        color: #28a745;
-        font-weight: bold;
+    
+    .back-link {
+        color: #007bff;
+        text-decoration: none;
+        font-size: 14px;
+        display: inline-block;
+        margin-bottom: 8px;
     }
+    
+    .header h1 {
+        font-size: 20px;
+        margin: 0;
+        color: #333;
+    }
+    
     .edit-form {
         background: white;
-        padding: 30px;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        padding: 24px;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         max-width: 500px;
         margin: 0 auto;
     }
+    
     .form-group {
         margin-bottom: 20px;
     }
+    
     .form-group label {
         display: block;
-        margin-bottom: 5px;
-        font-weight: bold;
+        margin-bottom: 6px;
+        font-weight: 600;
+        font-size: 14px;
+        color: #333;
     }
+    
     .form-group input {
         width: 100%;
-        padding: 10px;
+        padding: 12px;
         border: 1px solid #ddd;
-        border-radius: 4px;
+        border-radius: 8px;
         box-sizing: border-box;
+        font-size: 15px;
     }
+    
+    .form-group input:focus {
+        outline: none;
+        border-color: #007bff;
+    }
+    
+    .form-group input[readonly] {
+        background: #f8f9fa;
+        color: #666;
+    }
+    
     .button-group {
         display: flex;
         gap: 10px;
         justify-content: flex-end;
         margin-top: 30px;
     }
+    
     .cancel-btn {
         background: #6c757d;
         color: white;
-        padding: 10px 20px;
+        padding: 12px 24px;
         text-decoration: none;
-        border-radius: 4px;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 15px;
+        display: inline-block;
     }
+    
     .cancel-btn:hover {
         background: #5a6268;
+    }
+    
+    button[type="submit"] {
+        background: #007bff;
+        color: white;
+        padding: 12px 24px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 15px;
+        cursor: pointer;
+    }
+    
+    button[type="submit"]:hover {
+        background: #0056b3;
     }
 </style>
 {% endblock %}
@@ -78,23 +129,22 @@
         
         <div class="form-group">
             <label for="quantity">{{ info.quantity_label }}</label>
-            <input type="number" id="quantity" name="quantity" step="0.01" value="{{ asset.quantity }}" required>
+            {% if asset.asset_type == 'crypto' %}
+            <input type="number" id="quantity" name="quantity" step="0.0000000000001" value="{{ asset.quantity }}" required>
+            {% else %}
+            <input type="number" id="quantity" name="quantity" step="0.0000000000001" value="{{ asset.quantity }}" required>
+            {% endif %}
         </div>
         
         {% if asset.asset_type not in ['cash'] %}
         <div class="form-group">
             <label for="avg_cost">平均取得単価</label>
-            <input type="number" id="avg_cost" name="avg_cost" step="0.01" value="{{ asset.avg_cost }}" required>
+            <input type="number" id="avg_cost" name="avg_cost" step="0.0000000000001" value="{{ asset.avg_cost }}" required>
         </div>
         
         <div class="form-group">
             <label>現在価格（自動取得）</label>
-            <input type="text" value="
-                {%- if asset.asset_type == 'us_stock' -%}
-                    ${{ '{:,.2f}'.format(asset.price) }}
-                {%- else -%}
-                    {{ '{:,.0f}'.format(asset.price) }} 円
-                {%- endif -%}" readonly>
+            <input type="text" value="{% if asset.asset_type == 'us_stock' %}${{ '{:,.2f}'.format(asset.price) }}{% else %}¥{{ '{:,.0f}'.format(asset.price) }}{% endif %}" readonly>
         </div>
         {% endif %}
         
