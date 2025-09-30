@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ info.title }}管理{% endblock %}
+{% block title %}{{ info.title }}編集{% endblock %}
 
 {% block extra_styles %}
 <style>
@@ -26,622 +26,132 @@
         color: #333;
     }
     
-    .summary-card {
+    .edit-form {
         background: white;
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 20px;
-        text-align: center;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    }
-    
-    .summary-title {
-        font-size: 14px;
-        color: #666;
-        margin-bottom: 8px;
-    }
-    
-    .summary-value {
-        font-size: 32px;
-        font-weight: 700;
-        color: #333;
-        margin-bottom: 12px;
-    }
-    
-    .summary-profit {
-        font-size: 18px;
-        font-weight: 600;
-    }
-    
-    .profit-red { color: #dc3545; }
-    .profit-green { color: #28a745; }
-    
-    .add-button {
-        position: fixed;
-        bottom: 24px;
-        right: 24px;
-        width: 56px;
-        height: 56px;
-        border-radius: 50%;
-        background: #007bff;
-        color: white;
-        border: none;
-        font-size: 32px;
-        cursor: pointer;
-        box-shadow: 0 4px 12px rgba(0,123,255,0.4);
-        z-index: 1000;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        line-height: 1;
-    }
-    
-    .add-button:active {
-        transform: scale(0.95);
-    }
-    
-    .form-overlay {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.5);
-        z-index: 1001;
-        overflow-y: auto;
-        padding: 20px;
-    }
-    
-    .form-overlay.active {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    
-    .form-modal {
-        background: white;
-        border-radius: 16px;
         padding: 24px;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         max-width: 500px;
-        width: 100%;
-        max-height: 90vh;
-        overflow-y: auto;
-        position: relative;
-    }
-    
-    .form-close {
-        position: absolute;
-        top: 16px;
-        right: 16px;
-        background: none;
-        border: none;
-        font-size: 28px;
-        color: #666;
-        cursor: pointer;
-        padding: 0;
-        width: auto;
-        line-height: 1;
-    }
-    
-    .form-modal h3 {
-        margin: 0 0 20px 0;
-        font-size: 20px;
-        color: #333;
+        margin: 0 auto;
     }
     
     .form-group {
-        margin-bottom: 16px;
+        margin-bottom: 20px;
     }
     
     .form-group label {
         display: block;
-        font-size: 14px;
         margin-bottom: 6px;
         font-weight: 600;
+        font-size: 14px;
         color: #333;
     }
     
-    .form-group input,
-    .form-group select {
+    .form-group input {
         width: 100%;
         padding: 12px;
         border: 1px solid #ddd;
         border-radius: 8px;
-        font-size: 15px;
         box-sizing: border-box;
+        font-size: 15px;
     }
     
-    .form-group input:focus,
-    .form-group select:focus {
+    .form-group input:focus {
         outline: none;
         border-color: #007bff;
     }
     
-    .chip-group {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        margin-top: 6px;
+    .form-group input[readonly] {
+        background: #f8f9fa;
+        color: #666;
     }
     
-    .chip {
-        display: inline-flex;
-        align-items: center;
-        background: #f1f3f5;
-        border-radius: 20px;
-        padding: 8px 14px;
-        cursor: pointer;
-        border: 2px solid transparent;
-        transition: all 0.2s;
-    }
-    
-    .chip input {
-        display: none;
-    }
-    
-    .chip .chip-label {
-        font-weight: 600;
-        color: #333;
-        font-size: 14px;
-    }
-    
-    .chip input:checked ~ .chip-label {
-        color: #007bff;
-    }
-    
-    .chip.selected {
-        background: #e7f3ff;
-        border-color: #007bff;
-    }
-    
-    .form-buttons {
+    .button-group {
         display: flex;
         gap: 10px;
-        margin-top: 24px;
+        justify-content: flex-end;
+        margin-top: 30px;
     }
     
-    .form-buttons button {
-        flex: 1;
-        padding: 14px;
-        font-size: 15px;
+    .cancel-btn {
+        background: #6c757d;
+        color: white;
+        padding: 12px 24px;
+        text-decoration: none;
         border-radius: 8px;
         font-weight: 600;
-        border: none;
-        cursor: pointer;
+        font-size: 15px;
+        display: inline-block;
     }
     
-    .form-buttons button[type="submit"] {
+    .cancel-btn:hover {
+        background: #5a6268;
+    }
+    
+    button[type="submit"] {
         background: #007bff;
         color: white;
-    }
-    
-    .form-buttons .update-btn {
-        background: #28a745;
-        color: white;
-    }
-    
-    .stock-card {
-        background: white;
-        border-radius: 12px;
-        padding: 16px;
-        margin-bottom: 12px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        cursor: pointer;
-        transition: all 0.15s ease;
-    }
-    
-    .stock-card:active {
-        transform: scale(0.98);
-    }
-    
-    .stock-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 12px;
-        padding-bottom: 12px;
-        border-bottom: 1px solid #f0f0f0;
-    }
-    
-    .stock-symbol {
-        font-size: 18px;
-        font-weight: 700;
-        color: #333;
-    }
-    
-    .stock-name {
-        font-size: 13px;
-        color: #666;
-        margin-top: 3px;
-    }
-    
-    .stock-price {
-        font-size: 22px;
-        font-weight: 700;
-        color: #007bff;
-        text-align: right;
-    }
-    
-    .stock-details {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
-        margin: 12px 0;
-        font-size: 13px;
-    }
-    
-    .detail-item {
-        display: flex;
-        flex-direction: column;
-    }
-    
-    .detail-label {
-        color: #666;
-        font-size: 11px;
-        margin-bottom: 3px;
-    }
-    
-    .detail-value {
-        font-weight: 600;
-        color: #333;
-        font-size: 14px;
-    }
-    
-    .stock-profit-box {
-        background: #f8f9fa;
-        padding: 12px;
-        border-radius: 8px;
-        margin: 12px 0;
-        text-align: center;
-    }
-    
-    .stock-profit-label {
-        font-size: 11px;
-        color: #666;
-        margin-bottom: 4px;
-    }
-    
-    .stock-profit-value {
-        font-size: 20px;
-        font-weight: 700;
-    }
-    
-    .stock-actions {
-        display: flex;
-        gap: 8px;
-        margin-top: 12px;
-        padding-top: 12px;
-        border-top: 1px solid #f0f0f0;
-    }
-    
-    .edit-btn,
-    .delete-btn {
-        flex: 1;
-        padding: 10px;
-        border-radius: 8px;
-        text-align: center;
-        text-decoration: none;
-        font-size: 14px;
+        padding: 12px 24px;
         border: none;
-        cursor: pointer;
+        border-radius: 8px;
         font-weight: 600;
+        font-size: 15px;
+        cursor: pointer;
     }
     
-    .edit-btn {
-        background: #28a745;
-        color: white;
-    }
-    
-    .delete-btn {
-        background: #dc3545;
-        color: white;
-    }
-    
-    .empty-state {
-        text-align: center;
-        padding: 60px 20px;
-        color: #666;
-    }
-    
-    .empty-state-icon {
-        font-size: 64px;
-        margin-bottom: 16px;
-        opacity: 0.3;
-    }
-    
-    @media (min-width: 768px) {
-        .add-button {
-            position: static;
-            width: auto;
-            height: auto;
-            border-radius: 8px;
-            padding: 12px 24px;
-            font-size: 16px;
-            margin-bottom: 20px;
-        }
+    button[type="submit"]:hover {
+        background: #0056b3;
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="header">
-    <a href="{{ url_for('dashboard') }}" class="back-link">&larr; ダッシュボードに戻る</a>
-    <h1>{{ info.title }}管理</h1>
+    <a href="{{ url_for('manage_assets', asset_type=asset.asset_type) }}" class="back-link">← {{ info.title }}管理に戻る</a>
+    <h1>{{ info.title }}編集: {{ asset.symbol }}</h1>
 </div>
 
-{% if assets %}
-    {% set total_value = namespace(amount=0) %}
-    {% set total_cost = namespace(amount=0) %}
-    {% for asset in assets %}
-        {% if asset_type == 'investment_trust' %}
-            {% set total_value.amount = total_value.amount + (asset['quantity'] * asset['price'] / 10000) %}
-            {% set total_cost.amount = total_cost.amount + (asset['quantity'] * asset['avg_cost'] / 10000) %}
-        {% elif asset_type != 'cash' %}
-            {% set total_value.amount = total_value.amount + (asset['quantity'] * asset['price']) %}
-            {% set total_cost.amount = total_cost.amount + (asset['quantity'] * asset['avg_cost']) %}
-        {% else %}
-            {% set total_value.amount = total_value.amount + asset['quantity'] %}
-        {% endif %}
-    {% endfor %}
-    {% set total_profit = total_value.amount - total_cost.amount %}
-    
-    <div class="summary-card">
-        <div class="summary-title">{{ info.title }} 時価総額</div>
-        <div class="summary-value">
-            {% if asset_type == 'us_stock' %}
-                ${{ "{:,.2f}".format(total_value.amount) }}
-            {% else %}
-                &yen;{{ "{:,.0f}".format(total_value.amount) }}
-            {% endif %}
-        </div>
-        {% if asset_type != 'cash' %}
-        <div class="summary-profit {% if total_profit >= 0 %}profit-red{% else %}profit-green{% endif %}">
-            {% if total_profit >= 0 %}+{% endif %}
-            {% if asset_type == 'us_stock' %}
-                ${{ "{:,.2f}".format(total_profit) }}
-            {% else %}
-                &yen;{{ "{:,.0f}".format(total_profit) }}
-            {% endif %}
-        </div>
-        {% endif %}
-    </div>
-{% endif %}
-
-<button class="add-button" onclick="showAddForm()">+</button>
-
-<div class="form-overlay" id="formOverlay">
-    <div class="form-modal">
-        <button class="form-close" onclick="hideAddForm()">&times;</button>
-        <h3>{{ info.title }}を追加/更新</h3>
-        <form method="post" action="{{ url_for('add_asset') }}">
-            <input type="hidden" name="asset_type" value="{{ asset_type }}">
-            
-            <div class="form-group">
-                <label>{{ info.symbol_label }}</label>
-                {% if asset_type == 'crypto' %}
-                <div class="chip-group">
-                    {% for symbol in crypto_symbols %}
-                    <label class="chip" onclick="selectChip(this)">
-                        <input type="radio" name="symbol" value="{{ symbol }}" {% if loop.first %}checked{% endif %}>
-                        <span class="chip-label">{{ symbol }}</span>
-                    </label>
-                    {% endfor %}
-                </div>
-                {% elif asset_type == 'investment_trust' %}
-                <div class="chip-group">
-                    {% for symbol in investment_trust_symbols %}
-                    <label class="chip" onclick="selectChip(this)">
-                        <input type="radio" name="symbol" value="{{ symbol }}" {% if loop.first %}checked{% endif %}>
-                        <span class="chip-label">{{ symbol }}</span>
-                    </label>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <input type="text" name="symbol" placeholder="{{ info.symbol_label }}" required>
-                {% endif %}
-            </div>
-            
-            {% if asset_type not in ['cash'] %}
-            <div class="form-group">
-                <label>名前（オプション）</label>
-                <input type="text" name="name" placeholder="名前（オプション）">
-            </div>
-            {% endif %}
-            
-            <div class="form-group">
-                <label>{{ info.quantity_label }}</label>
-                <input type="number" name="quantity" step="any" placeholder="{{ info.quantity_label }}" required>
-            </div>
-            
-            {% if asset_type not in ['cash'] %}
-            <div class="form-group">
-                <label>平均取得単価</label>
-                <input type="number" name="avg_cost" step="any" placeholder="平均取得単価" required>
-            </div>
-            {% endif %}
-            
-            <div class="form-buttons">
-                {% if asset_type not in ['cash'] %}
-                <button type="button" onclick="updatePrices()" class="update-btn">価格更新</button>
-                {% endif %}
-                <button type="submit">追加/更新</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-{% if assets %}
-    {% for asset in assets %}
-    <div class="stock-card" data-edit-url="{{ url_for('edit_asset', asset_id=asset['id']) }}">
-        <div class="stock-header">
-            <div>
-                <div class="stock-symbol">{{ asset['symbol'] }}</div>
-                {% if asset_type not in ['cash'] %}
-                <div class="stock-name">{{ asset['name'] or '-' }}</div>
-                {% endif %}
-            </div>
-            <div>
-                <div class="stock-price">
-                    {% if asset_type == 'us_stock' %}
-                        ${{ "{:,.2f}".format(asset['price']) }}
-                    {% elif asset_type == 'investment_trust' %}
-                        &yen;{{ "{:,.0f}".format(asset['price']) }} <span style="font-size:12px; color:#666;">/1万口</span>
-                    {% elif asset_type not in ['cash'] %}
-                        &yen;{{ "{:,.0f}".format(asset['price']) }}
-                    {% endif %}
-                </div>
-            </div>
+<div class="edit-form">
+    <form method="post" action="{{ url_for('update_asset') }}">
+        <input type="hidden" name="asset_id" value="{{ asset.id }}">
+        
+        <div class="form-group">
+            <label for="symbol">{{ info.symbol_label }}</label>
+            <input type="text" id="symbol" name="symbol" value="{{ asset.symbol }}" required>
         </div>
         
-        <div class="stock-details">
-            <div class="detail-item">
-                <span class="detail-label">{{ info.quantity_label }}</span>
-                <span class="detail-value">{{ "{:,.2f}".format(asset['quantity']) }}</span>
-            </div>
-            
-            {% if asset_type not in ['cash'] %}
-            <div class="detail-item">
-                <span class="detail-label">平均取得単価</span>
-                <span class="detail-value">
-                    {% if asset_type == 'us_stock' %}
-                        ${{ "{:,.2f}".format(asset['avg_cost']) }}
-                    {% else %}
-                        &yen;{{ "{:,.0f}".format(asset['avg_cost']) }}
-                    {% endif %}
-                </span>
-            </div>
-            
-            <div class="detail-item">
-                <span class="detail-label">評価額</span>
-                <span class="detail-value">
-                    {% if asset_type == 'us_stock' %}
-                        ${{ "{:,.2f}".format(asset['quantity'] * asset['price']) }}
-                    {% elif asset_type == 'investment_trust' %}
-                        &yen;{{ "{:,.0f}".format((asset['quantity'] * asset['price']) / 10000) }}
-                    {% else %}
-                        &yen;{{ "{:,.0f}".format(asset['quantity'] * asset['price']) }}
-                    {% endif %}
-                </span>
-            </div>
+        {% if asset.asset_type not in ['cash'] %}
+        <div class="form-group">
+            <label for="name">名前</label>
+            <input type="text" id="name" name="name" value="{{ asset.name or '' }}" placeholder="名前（オプション）">
+        </div>
+        {% endif %}
+        
+        <div class="form-group">
+            <label for="quantity">{{ info.quantity_label }}</label>
+            {% if asset.asset_type == 'crypto' %}
+            <input type="number" id="quantity" name="quantity" step="0.0000000000001" value="{{ asset.quantity }}" required>
+            {% else %}
+            <input type="number" id="quantity" name="quantity" step="0.0000000000001" value="{{ asset.quantity }}" required>
             {% endif %}
         </div>
         
-        {% if asset_type not in ['cash'] %}
-            {% if asset_type == 'investment_trust' %}
-                {% set current_value = (asset['quantity'] * asset['price']) / 10000 %}
-                {% set cost_value = (asset['quantity'] * asset['avg_cost']) / 10000 %}
-            {% else %}
-                {% set current_value = asset['quantity'] * asset['price'] %}
-                {% set cost_value = asset['quantity'] * asset['avg_cost'] %}
-            {% endif %}
-            {% set profit = current_value - cost_value %}
-            <div class="stock-profit-box">
-                <div class="stock-profit-label">損益</div>
-                <div class="stock-profit-value {% if profit >= 0 %}profit-red{% else %}profit-green{% endif %}">
-                    {% if profit >= 0 %}+{% endif %}
-                    {% if asset_type == 'us_stock' %}
-                        ${{ "{:,.2f}".format(profit) }}
-                    {% else %}
-                        &yen;{{ "{:,.0f}".format(profit) }}
-                    {% endif %}
-                </div>
-            </div>
+        {% if asset.asset_type not in ['cash'] %}
+        <div class="form-group">
+            <label for="avg_cost">平均取得単価</label>
+            <input type="number" id="avg_cost" name="avg_cost" step="0.0000000000001" value="{{ asset.avg_cost }}" required>
+        </div>
+        
+        <div class="form-group">
+            <label>現在価格（自動取得）</label>
+            <input type="text" value="{% if asset.asset_type == 'us_stock' %}${{ '{:,.2f}'.format(asset.price) }}{% else %}¥{{ '{:,.0f}'.format(asset.price) }}{% endif %}" readonly>
+        </div>
         {% endif %}
         
-        <div class="stock-actions" onclick="event.stopPropagation()">
-            <a href="{{ url_for('edit_asset', asset_id=asset['id']) }}" class="edit-btn">編集</a>
-            <form method="post" action="{{ url_for('delete_asset') }}" style="flex: 1; margin: 0;">
-                <input type="hidden" name="asset_id" value="{{ asset['id'] }}">
-                <button type="submit" class="delete-btn" onclick="return confirm('削除しますか?')">削除</button>
-            </form>
+        <div class="button-group">
+            <a href="{{ url_for('manage_assets', asset_type=asset.asset_type) }}" class="cancel-btn">キャンセル</a>
+            <button type="submit">更新</button>
         </div>
-    </div>
-    {% endfor %}
-{% else %}
-<div class="empty-state">
-    <div class="empty-state-icon">&#128202;</div>
-    <p>まだ{{ info.title }}が登録されていません。<br>下の「+」ボタンから追加してください。</p>
+    </form>
 </div>
-{% endif %}
-{% endblock %}
-
-{% block scripts %}
-<script>
-// カードクリックイベントの設定
-document.querySelectorAll('.stock-card').forEach(function(card) {
-    card.addEventListener('click', function() {
-        const url = this.getAttribute('data-edit-url');
-        if (url) {
-            location.href = url;
-        }
-    });
-});
-
-function showAddForm() {
-    document.getElementById('formOverlay').classList.add('active');
-    document.body.style.overflow = 'hidden';
-}
-
-function hideAddForm() {
-    document.getElementById('formOverlay').classList.remove('active');
-    document.body.style.overflow = '';
-}
-
-document.getElementById('formOverlay').addEventListener('click', function(e) {
-    if (e.target === this) {
-        hideAddForm();
-    }
-});
-
-// チップ選択の見た目を更新する関数
-function selectChip(labelElement) {
-    // 同じグループ内の他のチップの選択状態を解除
-    const group = labelElement.closest('.chip-group');
-    group.querySelectorAll('.chip').forEach(chip => {
-        chip.classList.remove('selected');
-    });
-    // クリックされたチップを選択状態にする
-    labelElement.classList.add('selected');
-}
-
-// ページ読み込み時に、チェックされているラジオボタンの親に 'selected' クラスを付与
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.chip input[type="radio"]:checked').forEach(radio => {
-        radio.closest('.chip').classList.add('selected');
-    });
-});
-
-function updatePrices() {
-    const button = event.target;
-    const originalText = button.innerHTML;
-    button.disabled = true;
-    button.innerHTML = '更新中...';
-    
-    if(confirm('価格を最新情報で更新しますか？時間がかかる場合があります。')) {
-        fetch('{{ url_for("update_prices") }}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: 'asset_type={{ asset_type }}'
-        }).then(response => {
-            if(response.ok) {
-                location.reload();
-            } else {
-                alert('価格更新に失敗しました');
-                button.disabled = false;
-                button.innerHTML = originalText;
-            }
-        }).catch(error => {
-            alert('エラーが発生しました: ' + error.message);
-            button.disabled = false;
-            button.innerHTML = originalText;
-        });
-    } else {
-        button.disabled = false;
-        button.innerHTML = originalText;
-    }
-}
-</script>
 {% endblock %}
