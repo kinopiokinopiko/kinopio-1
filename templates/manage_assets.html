@@ -158,14 +158,14 @@
         border-color: #007bff;
     }
     
-    .crypto-chip-group {
+    .chip-group {
         display: flex;
         gap: 8px;
         flex-wrap: wrap;
         margin-top: 6px;
     }
     
-    .crypto-chip {
+    .chip {
         display: inline-flex;
         align-items: center;
         background: #f1f3f5;
@@ -176,21 +176,21 @@
         transition: all 0.2s;
     }
     
-    .crypto-chip input {
+    .chip input {
         display: none;
     }
     
-    .crypto-chip .chip-label {
+    .chip .chip-label {
         font-weight: 600;
         color: #333;
         font-size: 14px;
     }
     
-    .crypto-chip input:checked ~ .chip-label {
+    .chip input:checked ~ .chip-label {
         color: #007bff;
     }
     
-    .crypto-chip.selected {
+    .chip.selected {
         background: #e7f3ff;
         border-color: #007bff;
     }
@@ -374,7 +374,10 @@
     {% set total_value = namespace(amount=0) %}
     {% set total_cost = namespace(amount=0) %}
     {% for asset in assets %}
-        {% if asset_type != 'cash' %}
+        {% if asset_type == 'investment_trust' %}
+            {% set total_value.amount = total_value.amount + (asset['quantity'] * asset['price'] / 10000) %}
+            {% set total_cost.amount = total_cost.amount + (asset['quantity'] * asset['avg_cost'] / 10000) %}
+        {% elif asset_type != 'cash' %}
             {% set total_value.amount = total_value.amount + (asset['quantity'] * asset['price']) %}
             {% set total_cost.amount = total_cost.amount + (asset['quantity'] * asset['avg_cost']) %}
         {% else %}
@@ -417,9 +420,18 @@
             <div class="form-group">
                 <label>{{ info.symbol_label }}</label>
                 {% if asset_type == 'crypto' %}
-                <div class="crypto-chip-group">
+                <div class="chip-group">
                     {% for symbol in crypto_symbols %}
-                    <label class="crypto-chip" onclick="this.classList.toggle('selected')">
+                    <label class="chip" onclick="selectChip(this)">
+                        <input type="radio" name="symbol" value="{{ symbol }}" {% if loop.first %}checked{% endif %}>
+                        <span class="chip-label">{{ symbol }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                {% elif asset_type == 'investment_trust' %}
+                <div class="chip-group">
+                    {% for symbol in investment_trust_symbols %}
+                    <label class="chip" onclick="selectChip(this)">
                         <input type="radio" name="symbol" value="{{ symbol }}" {% if loop.first %}checked{% endif %}>
                         <span class="chip-label">{{ symbol }}</span>
                     </label>
@@ -439,21 +451,13 @@
             
             <div class="form-group">
                 <label>{{ info.quantity_label }}</label>
-                {% if asset_type == 'crypto' %}
-                <input type="number" name="quantity" step="0.00000001" placeholder="{{ info.quantity_label }}" required>
-                {% else %}
-                <input type="number" name="quantity" step="0.01" placeholder="{{ info.quantity_label }}" required>
-                {% endif %}
+                <input type="number" name="quantity" step="any" placeholder="{{ info.quantity_label }}" required>
             </div>
             
             {% if asset_type not in ['cash'] %}
             <div class="form-group">
                 <label>平均取得単価</label>
-                {% if asset_type == 'crypto' %}
-                <input type="number" name="avg_cost" step="0.01" placeholder="平均取得単価" required>
-                {% else %}
-                <input type="number" name="avg_cost" step="0.01" placeholder="平均取得単価" required>
-                {% endif %}
+                <input type="number" name="avg_cost" step="any" placeholder="平均取得単価" required>
             </div>
             {% endif %}
             
@@ -481,6 +485,8 @@
                 <div class="stock-price">
                     {% if asset_type == 'us_stock' %}
                         ${{ "{:,.2f}".format(asset['price']) }}
+                    {% elif asset_type == 'investment_trust' %}
+                        &yen;{{ "{:,.0f}".format(asset['price']) }} <span style="font-size:12px; color:#666;">/1万口</span>
                     {% elif asset_type not in ['cash'] %}
                         &yen;{{ "{:,.0f}".format(asset['price']) }}
                     {% endif %}
@@ -511,6 +517,8 @@
                 <span class="detail-value">
                     {% if asset_type == 'us_stock' %}
                         ${{ "{:,.2f}".format(asset['quantity'] * asset['price']) }}
+                    {% elif asset_type == 'investment_trust' %}
+                        &yen;{{ "{:,.0f}".format((asset['quantity'] * asset['price']) / 10000) }}
                     {% else %}
                         &yen;{{ "{:,.0f}".format(asset['quantity'] * asset['price']) }}
                     {% endif %}
@@ -520,20 +528,25 @@
         </div>
         
         {% if asset_type not in ['cash'] %}
-        {% set current_value = asset['quantity'] * asset['price'] %}
-        {% set cost_value = asset['quantity'] * asset['avg_cost'] %}
-        {% set profit = current_value - cost_value %}
-        <div class="stock-profit-box">
-            <div class="stock-profit-label">損益</div>
-            <div class="stock-profit-value {% if profit >= 0 %}profit-red{% else %}profit-green{% endif %}">
-                {% if profit >= 0 %}+{% endif %}
-                {% if asset_type == 'us_stock' %}
-                    ${{ "{:,.2f}".format(profit) }}
-                {% else %}
-                    &yen;{{ "{:,.0f}".format(profit) }}
-                {% endif %}
+            {% if asset_type == 'investment_trust' %}
+                {% set current_value = (asset['quantity'] * asset['price']) / 10000 %}
+                {% set cost_value = (asset['quantity'] * asset['avg_cost']) / 10000 %}
+            {% else %}
+                {% set current_value = asset['quantity'] * asset['price'] %}
+                {% set cost_value = asset['quantity'] * asset['avg_cost'] %}
+            {% endif %}
+            {% set profit = current_value - cost_value %}
+            <div class="stock-profit-box">
+                <div class="stock-profit-label">損益</div>
+                <div class="stock-profit-value {% if profit >= 0 %}profit-red{% else %}profit-green{% endif %}">
+                    {% if profit >= 0 %}+{% endif %}
+                    {% if asset_type == 'us_stock' %}
+                        ${{ "{:,.2f}".format(profit) }}
+                    {% else %}
+                        &yen;{{ "{:,.0f}".format(profit) }}
+                    {% endif %}
+                </div>
             </div>
-        </div>
         {% endif %}
         
         <div class="stock-actions" onclick="event.stopPropagation()">
@@ -548,7 +561,7 @@
 {% else %}
 <div class="empty-state">
     <div class="empty-state-icon">&#128202;</div>
-    <p>まだ{{ info.title }}が登録されていません。<br>右下の「+」ボタンから追加してください。</p>
+    <p>まだ{{ info.title }}が登録されていません。<br>下の「+」ボタンから追加してください。</p>
 </div>
 {% endif %}
 {% endblock %}
@@ -579,6 +592,24 @@ document.getElementById('formOverlay').addEventListener('click', function(e) {
     if (e.target === this) {
         hideAddForm();
     }
+});
+
+// チップ選択の見た目を更新する関数
+function selectChip(labelElement) {
+    // 同じグループ内の他のチップの選択状態を解除
+    const group = labelElement.closest('.chip-group');
+    group.querySelectorAll('.chip').forEach(chip => {
+        chip.classList.remove('selected');
+    });
+    // クリックされたチップを選択状態にする
+    labelElement.classList.add('selected');
+}
+
+// ページ読み込み時に、チェックされているラジオボタンの親に 'selected' クラスを付与
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.chip input[type="radio"]:checked').forEach(radio => {
+        radio.closest('.chip').classList.add('selected');
+    });
 });
 
 function updatePrices() {
