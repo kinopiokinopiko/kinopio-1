@@ -14,7 +14,7 @@ import concurrent.futures
 # PostgreSQLサポート
 try:
     import psycopg2
-    from psycopg2.extras import RealDictCursor
+    from psycopg2.extras import RealDictCursor, execute_values
     POSTGRES_AVAILABLE = True
 except ImportError:
     POSTGRES_AVAILABLE = False
@@ -1031,47 +1031,48 @@ def update_all_prices():
     
     all_assets = c.fetchall()
     
+    if not all_assets:
+        conn.close()
+        flash('更新対象の資産がありません', 'success')
+        return redirect(url_for('dashboard'))
+
     # --- 2. 各資産の価格を取得する並列処理用の関数を定義 ---
     def fetch_price(asset):
-        """個々の資産の価格を取得するワーカー関数"""
-        asset_type = asset['asset_type']
-        symbol = asset['symbol']
+        asset_type, symbol = asset['asset_type'], asset['symbol']
         price = 0
         try:
-            if asset_type == 'jp_stock':
-                price = get_stock_price(symbol, is_jp=True)
-            elif asset_type == 'us_stock':
-                price = get_stock_price(symbol, is_jp=False)
-            elif asset_type == 'gold':
-                price = get_gold_price()
-            elif asset_type == 'crypto':
-                price = get_crypto_price(symbol)
-            elif asset_type == 'investment_trust':
-                price = get_investment_trust_price(symbol)
-            
-            # 結果を「資産ID」と「価格」のタプルで返す
+            if asset_type == 'jp_stock': price = get_stock_price(symbol, is_jp=True)
+            elif asset_type == 'us_stock': price = get_stock_price(symbol, is_jp=False)
+            elif asset_type == 'gold': price = get_gold_price()
+            elif asset_type == 'crypto': price = get_crypto_price(symbol)
+            elif asset_type == 'investment_trust': price = get_investment_trust_price(symbol)
             return (asset['id'], price)
         except Exception as e:
             print(f"Error in worker for {symbol} ({asset_type}): {e}")
-            return (asset['id'], 0) # エラー時は価格0を返す
+            return (asset['id'], 0)
 
     # --- 3. ThreadPoolExecutorで並列処理を実行 ---
-    # max_workersの数だけ同時にリクエストが実行される
     updated_prices = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-        # all_assetsリストの各要素をfetch_price関数に渡し、並列実行
         results = executor.map(fetch_price, all_assets)
-        # 結果をリストに格納
-        updated_prices = [result for result in results if result and result[1] is not None and result[1] > 0]
+        updated_prices = [
+            # (price, asset_id) の順にする
+            (res[1], res[0]) for res in results if res and res[1] is not None and res[1] > 0
+        ]
 
-    # --- 4. 取得した価格でDBを更新 ---
+    # --- ▼▼▼ ここからが高速化のキモです ▼▼▼ ---
+    # --- 4. 取得した価格でDBを一括更新 ---
     if updated_prices:
-        for asset_id, price in updated_prices:
-            if USE_POSTGRES:
-                c.execute('UPDATE assets SET price = %s WHERE id = %s', (price, asset_id))
-            else:
-                c.execute('UPDATE assets SET price = ? WHERE id = ?', (price, asset_id))
-    
+        print(f"Updating {len(updated_prices)} assets in the database...")
+        if USE_POSTGRES:
+            # PostgreSQLの場合: execute_valuesで一括UPDATE
+            update_query = "UPDATE assets SET price = data.price FROM (VALUES %s) AS data(price, id) WHERE assets.id = data.id"
+            execute_values(c, update_query, updated_prices)
+        else:
+            # SQLiteの場合: executemanyで一件ずつ実行（これでもループよりは速い）
+            c.executemany('UPDATE assets SET price = ? WHERE id = ?', updated_prices)
+    # --- ▲▲▲ ここまでが高速化のキモです ▲▲▲ ---
+
     conn.commit()
     conn.close()
     
@@ -1082,4 +1083,5 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
 
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
