@@ -377,6 +377,9 @@
         {% if asset_type == 'investment_trust' %}
             {% set total_value.amount = total_value.amount + (asset['quantity'] * asset['price'] / 10000) %}
             {% set total_cost.amount = total_cost.amount + (asset['quantity'] * asset['avg_cost'] / 10000) %}
+        {% elif asset_type == 'insurance' %}
+            {% set total_value.amount = total_value.amount + asset['price'] %}
+            {% set total_cost.amount = total_cost.amount + asset['avg_cost'] %}
         {% elif asset_type != 'cash' %}
             {% set total_value.amount = total_value.amount + (asset['quantity'] * asset['price']) %}
             {% set total_cost.amount = total_cost.amount + (asset['quantity'] * asset['avg_cost']) %}
@@ -417,52 +420,70 @@
         <form method="post" action="{{ url_for('add_asset') }}">
             <input type="hidden" name="asset_type" value="{{ asset_type }}">
             
-            <div class="form-group">
-                <label>{{ info.symbol_label }}</label>
-                {% if asset_type == 'crypto' %}
-                <div class="chip-group">
-                    {% for symbol in crypto_symbols %}
-                    <label class="chip" onclick="selectChip(this)">
-                        <input type="radio" name="symbol" value="{{ symbol }}" {% if loop.first %}checked{% endif %}>
-                        <span class="chip-label">{{ symbol }}</span>
-                    </label>
-                    {% endfor %}
+            {% if asset_type == 'insurance' %}
+                <div class="form-group">
+                    <label for="symbol">項目名（例: ○○生命 終身保険）</label>
+                    <input type="text" id="symbol" name="symbol" placeholder="項目名" required>
                 </div>
-                {% elif asset_type == 'investment_trust' %}
-                <div class="chip-group">
-                    {% for symbol in investment_trust_symbols %}
-                    <label class="chip" onclick="selectChip(this)">
-                        <input type="radio" name="symbol" value="{{ symbol }}" {% if loop.first %}checked{% endif %}>
-                        <span class="chip-label">{{ symbol }}</span>
-                    </label>
-                    {% endfor %}
+                <div class="form-group">
+                    <label for="name">保険種類</label>
+                    <select id="name" name="name" required>
+                        <option value="" disabled selected>選択してください</option>
+                        {% for type in insurance_types %}
+                        <option value="{{ type }}">{{ type }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
-                {% else %}
-                <input type="text" name="symbol" placeholder="{{ info.symbol_label }}" required>
-                {% endif %}
-            </div>
-            
-            {% if asset_type not in ['cash'] %}
-            <div class="form-group">
-                <label>名前（オプション）</label>
-                <input type="text" name="name" placeholder="名前（オプション）">
-            </div>
-            {% endif %}
-            
-            <div class="form-group">
-                <label>{{ info.quantity_label }}</label>
-                <input type="number" name="quantity" step="any" placeholder="{{ info.quantity_label }}" required>
-            </div>
-            
-            {% if asset_type not in ['cash'] %}
-            <div class="form-group">
-                <label>平均取得単価</label>
-                <input type="number" name="avg_cost" step="any" placeholder="平均取得単価" required>
-            </div>
-            {% endif %}
-            
-            <div class="form-buttons">
+                <div class="form-group">
+                    <label for="avg_cost">支払済保険料総額</label>
+                    <input type="number" id="avg_cost" name="avg_cost" step="any" placeholder="支払済保険料総額" required>
+                </div>
+                <div class="form-group">
+                    <label for="price">解約返戻金(時価)</label>
+                    <input type="number" id="price" name="price" step="any" placeholder="解約返戻金(時価)" required>
+                </div>
+                <input type="hidden" name="quantity" value="0">
+            {% else %}
+                <div class="form-group">
+                    <label>{{ info.symbol_label }}</label>
+                    {% if asset_type == 'crypto' %}
+                    <div class="chip-group">
+                        {% for symbol in crypto_symbols %}
+                        <label class="chip" onclick="selectChip(this)">
+                            <input type="radio" name="symbol" value="{{ symbol }}" {% if loop.first %}checked{% endif %}>
+                            <span class="chip-label">{{ symbol }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    {% elif asset_type == 'investment_trust' %}
+                    <div class="chip-group">
+                        {% for symbol in investment_trust_symbols %}
+                        <label class="chip" onclick="selectChip(this)">
+                            <input type="radio" name="symbol" value="{{ symbol }}" {% if loop.first %}checked{% endif %}>
+                            <span class="chip-label">{{ symbol }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <input type="text" name="symbol" placeholder="{{ info.symbol_label }}" required>
+                    {% endif %}
+                </div>
+                
+                <div class="form-group">
+                    <label>{{ info.quantity_label }}</label>
+                    <input type="number" name="quantity" step="any" placeholder="{{ info.quantity_label }}" required>
+                </div>
+                
                 {% if asset_type not in ['cash'] %}
+                <div class="form-group">
+                    <label>平均取得単価</label>
+                    <input type="number" name="avg_cost" step="any" placeholder="平均取得単価" required>
+                </div>
+                {% endif %}
+            {% endif %}
+
+            <div class="form-buttons">
+                {% if asset_type not in ['cash', 'insurance'] %}
                 <button type="button" onclick="updatePrices()" class="update-btn">価格更新</button>
                 {% endif %}
                 <button type="submit">追加/更新</button>
@@ -474,60 +495,107 @@
 {% if assets %}
     {% for asset in assets %}
     <div class="stock-card" data-edit-url="{{ url_for('edit_asset', asset_id=asset['id']) }}">
-        <div class="stock-header">
-            <div>
-                <div class="stock-symbol">{{ asset['symbol'] }}</div>
-                {% if asset_type not in ['cash'] %}
-                <div class="stock-name">{{ asset['name'] or '-' }}</div>
-                {% endif %}
-            </div>
-            <div>
-                <div class="stock-price">
-                    {% if asset_type == 'us_stock' %}
-                        ${{ "{:,.2f}".format(asset['price']) }}
-                    {% elif asset_type == 'investment_trust' %}
-                        &yen;{{ "{:,.0f}".format(asset['price']) }} <span style="font-size:12px; color:#666;">/1万口</span>
-                    {% elif asset_type not in ['cash'] %}
+        
+        {% if asset_type == 'jp_stock' %}
+            <div class="stock-header">
+                <div>
+                    <div class="stock-symbol">{{ asset['name'] or asset['symbol'] }}</div>
+                    <div class="stock-name">{{ asset['symbol'] }}</div>
+                </div>
+                <div>
+                    <div class="stock-price">
                         &yen;{{ "{:,.0f}".format(asset['price']) }}
-                    {% endif %}
+                    </div>
                 </div>
             </div>
-        </div>
-        
-        <div class="stock-details">
-            <div class="detail-item">
-                <span class="detail-label">{{ info.quantity_label }}</span>
-                <span class="detail-value">{{ "{:,.2f}".format(asset['quantity']) }}</span>
+        {% elif asset_type == 'insurance' %}
+            <div class="stock-header">
+                <div>
+                    <div class="stock-symbol">{{ asset.symbol }}</div>
+                    <div class="stock-name">{{ asset.name or '-' }}</div>
+                </div>
             </div>
-            
-            {% if asset_type not in ['cash'] %}
-            <div class="detail-item">
-                <span class="detail-label">平均取得単価</span>
-                <span class="detail-value">
-                    {% if asset_type == 'us_stock' %}
-                        ${{ "{:,.2f}".format(asset['avg_cost']) }}
-                    {% else %}
-                        &yen;{{ "{:,.0f}".format(asset['avg_cost']) }}
+        {% else %}
+             <div class="stock-header">
+                <div>
+                    <div class="stock-symbol">{{ asset['symbol'] }}</div>
+                    {% if asset_type not in ['cash'] %}
+                    <div class="stock-name">{{ asset['name'] or '-' }}</div>
                     {% endif %}
-                </span>
+                </div>
+                <div>
+                    <div class="stock-price">
+                        {% if asset_type == 'us_stock' %}
+                            ${{ "{:,.2f}".format(asset['price']) }}
+                        {% elif asset_type == 'investment_trust' %}
+                            &yen;{{ "{:,.0f}".format(asset['price']) }} <span style="font-size:12px; color:#666;">/1万口</span>
+                        {% elif asset_type not in ['cash'] %}
+                            &yen;{{ "{:,.0f}".format(asset['price']) }}
+                        {% endif %}
+                    </div>
+                </div>
             </div>
-            
-            <div class="detail-item">
-                <span class="detail-label">評価額</span>
-                <span class="detail-value">
-                    {% if asset_type == 'us_stock' %}
-                        ${{ "{:,.2f}".format(asset['quantity'] * asset['price']) }}
-                    {% elif asset_type == 'investment_trust' %}
-                        &yen;{{ "{:,.0f}".format((asset['quantity'] * asset['price']) / 10000) }}
-                    {% else %}
-                        &yen;{{ "{:,.0f}".format(asset['quantity'] * asset['price']) }}
-                    {% endif %}
-                </span>
+        {% endif %}
+
+        {% if asset_type == 'insurance' %}
+             <div class="stock-details" style="grid-template-columns: 1fr 1fr 1fr;">
+                <div class="detail-item">
+                    <span class="detail-label">保険金額</span>
+                    <span class="detail-value">¥{{ "{:,.0f}".format(asset.quantity) }}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">支払済保険料</span>
+                    <span class="detail-value">¥{{ "{:,.0f}".format(asset.avg_cost) }}</span>
+                </div>
+                 <div class="detail-item">
+                    <span class="detail-label">評価額(返戻金)</span>
+                    <span class="detail-value">¥{{ "{:,.0f}".format(asset.price) }}</span>
+                </div>
             </div>
-            {% endif %}
-        </div>
+        {% else %}
+            <div class="stock-details">
+                <div class="detail-item">
+                    <span class="detail-label">{{ info.quantity_label }}</span>
+                    <span class="detail-value">{{ "{:,.2f}".format(asset['quantity']) }}</span>
+                </div>
+                
+                {% if asset_type not in ['cash'] %}
+                <div class="detail-item">
+                    <span class="detail-label">平均取得単価</span>
+                    <span class="detail-value">
+                        {% if asset_type == 'us_stock' %}
+                            ${{ "{:,.2f}".format(asset['avg_cost']) }}
+                        {% else %}
+                            &yen;{{ "{:,.0f}".format(asset['avg_cost']) }}
+                        {% endif %}
+                    </span>
+                </div>
+                
+                <div class="detail-item">
+                    <span class="detail-label">評価額</span>
+                    <span class="detail-value">
+                        {% if asset_type == 'us_stock' %}
+                            ${{ "{:,.2f}".format(asset['quantity'] * asset['price']) }}
+                        {% elif asset_type == 'investment_trust' %}
+                            &yen;{{ "{:,.0f}".format((asset['quantity'] * asset['price']) / 10000) }}
+                        {% else %}
+                            &yen;{{ "{:,.0f}".format(asset['quantity'] * asset['price']) }}
+                        {% endif %}
+                    </span>
+                </div>
+                {% endif %}
+            </div>
+        {% endif %}
         
-        {% if asset_type not in ['cash'] %}
+        {% if asset_type == 'insurance' %}
+            {% set profit = asset.price - asset.avg_cost %}
+            <div class="stock-profit-box">
+                <div class="stock-profit-label">損益</div>
+                <div class="stock-profit-value {% if profit >= 0 %}profit-red{% else %}profit-green{% endif %}">
+                    {% if profit >= 0 %}+{% endif %}¥{{ "{:,.0f}".format(profit) }}
+                </div>
+            </div>
+        {% elif asset_type not in ['cash'] %}
             {% if asset_type == 'investment_trust' %}
                 {% set current_value = (asset['quantity'] * asset['price']) / 10000 %}
                 {% set cost_value = (asset['quantity'] * asset['avg_cost']) / 10000 %}

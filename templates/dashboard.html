@@ -155,7 +155,7 @@
             margin: 0 auto;
         }
         .asset-grid {
-            grid-template-columns: repeat(5, 1fr);
+            grid-template-columns: repeat(4, 1fr);
         }
     }
 </style>
@@ -183,7 +183,7 @@
 </div>
 
 <div class="total-card">
-    <div class="total-label">総残高</div>
+    <div class="total-label">総資産</div>
     <div class="total-amount">¥{{ "{:,.0f}".format(total_assets) }}</div>
     <div class="total-profit {% if total_profit >= 0 %}profit-plus{% else %}profit-minus{% endif %}">
         {% if total_profit >= 0 %}+{% endif %}¥{{ "{:,.0f}".format(total_profit) }}
@@ -245,6 +245,16 @@
         <div class="card-detail">{{ investment_trust_items|length }} 銘柄</div>
         <div class="card-profit {% if investment_trust_profit >= 0 %}profit-plus{% else %}profit-minus{% endif %}">
             {% if investment_trust_profit >= 0 %}+{% endif %}¥{{ "{:,.0f}".format(investment_trust_profit) }}
+        </div>
+    </a>
+
+    <a href="{{ url_for('manage_assets', asset_type='insurance') }}" class="asset-card">
+        <div class="card-icon" style="background: #e0f7fa;">🛡️</div>
+        <div class="card-name">保険</div>
+        <div class="card-amount">¥{{ "{:,.0f}".format(insurance_total) }}</div>
+        <div class="card-detail">{{ insurance_items|length }} 件</div>
+        <div class="card-profit {% if insurance_profit >= 0 %}profit-plus{% else %}profit-minus{% endif %}">
+            {% if insurance_profit >= 0 %}+{% endif %}¥{{ "{:,.0f}".format(insurance_profit) }}
         </div>
     </a>
 </div>
