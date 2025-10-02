@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 import time
 from decimal import Decimal, InvalidOperation
 import concurrent.futures
+import threading # 追加
 
 # PostgreSQLサポート
 try:
@@ -126,10 +127,46 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-this-in-production')
 
 
+# --- ここから追加 ---
+
 @app.route('/ping')
 def ping():
     """スリープ防止用のエンドポイント"""
     return "pong", 200
+
+def keep_alive():
+    """
+    アプリケーションがスリープしないように、定期的に自身にリクエストを送る関数。
+    """
+    # Renderの外部URLが環境変数に設定されているか確認
+    app_url = os.environ.get('RENDER_EXTERNAL_URL')
+    
+    if not app_url:
+        print("RENDER_EXTERNAL_URL is not set. Keep-alive thread will not run.")
+        return
+
+    ping_url = f"{app_url}/ping"
+    
+    # 14分 = 840秒ごとにpingを送信
+    while True:
+        try:
+            print("Sending keep-alive ping...")
+            requests.get(ping_url, timeout=10)
+            print("Keep-alive ping successful.")
+        except requests.exceptions.RequestException as e:
+            print(f"Keep-alive ping failed: {e}")
+        
+        time.sleep(840)
+
+# Render環境で実行されている場合のみ、スリープ防止スレッドを開始
+if os.environ.get('RENDER'):
+    print("Starting keep-alive thread for Render...")
+    # デーモンスレッドにすることで、メインプログラム終了時にスレッドも終了するようにする
+    keep_alive_thread = threading.Thread(target=keep_alive, daemon=True)
+    keep_alive_thread.start()
+
+# --- ここまで追加 ---
+
 
 def get_current_user():
     """現在のユーザーを取得"""
@@ -483,6 +520,9 @@ def get_usd_jpy_rate():
 
 # アプリケーション開始時にDB初期化
 init_db()
+
+# ここから下のルーティング部分は変更なし
+# ... (app.pyの残りの部分は省略) ...
 
 @app.route('/')
 def index():
