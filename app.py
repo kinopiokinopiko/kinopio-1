@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 import time
 from decimal import Decimal, InvalidOperation
 import concurrent.futures
-import threading # 追加
+import threading
 
 # PostgreSQLサポート
 try:
@@ -127,8 +127,6 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-this-in-production')
 
 
-# --- ここから追加 ---
-
 @app.route('/ping')
 def ping():
     """スリープ防止用のエンドポイント"""
@@ -138,7 +136,6 @@ def keep_alive():
     """
     アプリケーションがスリープしないように、定期的に自身にリクエストを送る関数。
     """
-    # Renderの外部URLが環境変数に設定されているか確認
     app_url = os.environ.get('RENDER_EXTERNAL_URL')
     
     if not app_url:
@@ -147,7 +144,6 @@ def keep_alive():
 
     ping_url = f"{app_url}/ping"
     
-    # 14分 = 840秒ごとにpingを送信
     while True:
         try:
             print("Sending keep-alive ping...")
@@ -158,14 +154,10 @@ def keep_alive():
         
         time.sleep(840)
 
-# Render環境で実行されている場合のみ、スリープ防止スレッドを開始
 if os.environ.get('RENDER'):
     print("Starting keep-alive thread for Render...")
-    # デーモンスレッドにすることで、メインプログラム終了時にスレッドも終了するようにする
     keep_alive_thread = threading.Thread(target=keep_alive, daemon=True)
     keep_alive_thread.start()
-
-# --- ここまで追加 ---
 
 
 def get_current_user():
@@ -185,9 +177,6 @@ def get_current_user():
     conn.close()
     return user
 
-
-# --- ユーティリティ:文字列正規化・数値抽出 ---
-
 _FULLWIDTH_TRANS = {ord(f): ord(t) for f, t in zip('０１２３４５６７８９', '0123456789')}
 _FULLWIDTH_TRANS.update({ord('，'): ord(','), ord('．'): ord('.'), ord('＋'): ord('+'), ord('－'): ord('-'), ord('　'): ord(' '), ord('％'): ord('%')})
 
@@ -199,7 +188,6 @@ def normalize_fullwidth(s):
 
 
 def extract_number_from_string(s):
-    """文字列中から最初に見つかる妥当な数値を抽出して float を返す(小数点・指数表記対応)"""
     if not s:
         return None
     try:
@@ -209,21 +197,17 @@ def extract_number_from_string(s):
 
     s = s.replace('\xa0', ' ')
 
-    # 優先パターン:桁区切りカンマやスペースに対応し、小数および指数表記を許す
     m = re.search(r'([+-]?\d{1,3}(?:[,\s]\d{3})*(?:\.\d+)?(?:[eE][+-]?\d+)?)', s)
     if not m:
-        # 最低限の数値(小数・指数含む)
         m = re.search(r'([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)', s)
     if not m:
         return None
 
     num_str = m.group(1)
-    # カンマと空白の除去
     num_str = num_str.replace(',', '').replace(' ', '')
 
     try:
         d = Decimal(num_str)
-        # float に変換して返す(DBの REAL に合わせるため)
         return float(d)
     except (InvalidOperation, ValueError):
         try:
@@ -233,7 +217,6 @@ def extract_number_from_string(s):
 
 
 def scrape_yahoo_finance_jp(code):
-    """Yahoo Finance APIから日本株の情報を取得"""
     try:
         api_url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.T"
         headers = {
@@ -262,12 +245,10 @@ def scrape_yahoo_finance_jp(code):
                         name = meta.get('shortName') or meta.get('longName') or f"Stock {code}"
 
                     if name:
-                        # Clean up common Japanese corporate suffixes
                         jp_suffixes = ['株式会社', '合同会社', '合名会社', '合資会社', '有限会社', '(株)', '（株）']
                         for suffix in jp_suffixes:
                             name = name.replace(suffix, '')
                         
-                        # Clean up common English corporate suffixes
                         en_suffixes = [' COMPANY, LIMITED', ' COMPANY LIMITED', ' CO., LTD.', ' CO.,LTD.', ' CO., LTD', ' CO.,LTD', ' Co., Ltd.', ' CO.LTD', ' LTD.', ' LTD', ' INC.', ' INC', ' CORP.', ' CORP']
                         for suffix in en_suffixes:
                             if name.upper().endswith(suffix):
@@ -288,7 +269,6 @@ def scrape_yahoo_finance_jp(code):
         return {'name': f'Stock {code}', 'price': 0}
 
 def scrape_yahoo_finance_us(symbol):
-    """Yahoo Finance APIから米国株の情報を取得"""
     try:
         api_url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol.upper()}"
         headers = {
@@ -328,29 +308,24 @@ def scrape_yahoo_finance_us(symbol):
         return {'name': symbol.upper(), 'price': 0}
 
 def get_jp_stock_info(code):
-    """日本株の情報を取得"""
     return scrape_yahoo_finance_jp(code)
 
 def get_us_stock_info(symbol):
-    """米国株の情報を取得"""
     return scrape_yahoo_finance_us(symbol)
 
 def get_stock_price(symbol, is_jp=False):
-    """株価を取得"""
     if is_jp:
         return get_jp_stock_info(symbol)['price']
     else:
         return get_us_stock_info(symbol)['price']
 
 def get_stock_name(symbol, is_jp=False):
-    """株式名を取得"""
     if is_jp:
         return get_jp_stock_info(symbol)['name']
     else:
         return get_us_stock_info(symbol)['name']
         
 def get_crypto_price(symbol):
-    """みんかぶ暗号資産から価格をスクレイピング(BTC/ETH/XRP/DOGEに限定)"""
     try:
         symbol = (symbol or '').upper()
         if symbol not in CRYPTO_SYMBOLS:
@@ -365,7 +340,6 @@ def get_crypto_price(symbol):
         response.encoding = response.apparent_encoding
         text = response.text
         
-        # JSONパターン検索
         json_matches = re.findall(r'"(?:last|price|lastPrice|close|current|ltp)"\s*:\s*"?([0-9\.,Ee+\-]+)"?', text)
         if json_matches:
             for jm in json_matches:
@@ -375,7 +349,6 @@ def get_crypto_price(symbol):
                         print(f"[DEBUG] Found price in JSON-like field: {jm} -> {val}")
                     return round(val, 2)
 
-        # 「現在値」付近検索
         idx = text.find('現在値')
         if idx != -1:
             snippet = text[idx: idx + 700]
@@ -386,14 +359,12 @@ def get_crypto_price(symbol):
                 except:
                     pass
 
-        # data-price属性
         m = re.search(r'data-price=["\']([0-9\.,Ee+\-]+)["\']', text)
         if m:
             val = extract_number_from_string(m.group(1))
             if val is not None:
                 return round(val, 2)
 
-        # BeautifulSoup検索
         soup = BeautifulSoup(text, 'html.parser')
         selectors = ['div.pairPrice', '.pairPrice', '.pair_price', 'div.priceWrap', 'div.kv',
                      'span.yen', 'div.stock_price span.yen', 'p.price', 'span.price', 'div.price',
@@ -411,7 +382,6 @@ def get_crypto_price(symbol):
                         print(f"[DEBUG] Found price by selector {sel}: {txt} -> {val}")
                     return round(val, 2)
 
-        # 全体から「xxx 円」を検索
         normalized = normalize_fullwidth(text)
         matches = re.findall(r'([0-9]{1,3}(?:,[0-9]{3})*(?:\.\d+)?)\s*円', normalized)
         for num in matches:
@@ -422,7 +392,6 @@ def get_crypto_price(symbol):
             except:
                 continue
 
-        # 指数表記検索
         m2 = re.search(r'([0-9\.,]+[eE][+-]?\d+)', text)
         if m2:
             val = extract_number_from_string(m2.group(1))
@@ -440,7 +409,6 @@ def get_crypto_price(symbol):
         return 0.0
 
 def get_gold_price():
-    """金価格を取得(田中貴金属からスクレイピング)"""
     try:
         tanaka_url = "https://gold.tanaka.co.jp/commodity/souba/english/index.php"
         headers = {
@@ -463,7 +431,6 @@ def get_gold_price():
         return 0
 
 def get_investment_trust_price(symbol):
-    """楽天証券から投資信託の基準価額を取得"""
     if symbol not in INVESTMENT_TRUST_INFO:
         print(f"Unsupported investment trust symbol: {symbol}")
         return 0.0
@@ -498,7 +465,6 @@ def get_investment_trust_price(symbol):
 
 
 def get_usd_jpy_rate():
-    """USD/JPY レートを取得"""
     try:
         api_url = "https://query1.finance.yahoo.com/v8/finance/chart/USDJPY=X"
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -518,11 +484,7 @@ def get_usd_jpy_rate():
         print(f"Error getting USD/JPY rate: {e}")
         return 150.0
 
-# アプリケーション開始時にDB初期化
 init_db()
-
-# ここから下のルーティング部分は変更なし
-# ... (app.pyの残りの部分は省略) ...
 
 @app.route('/')
 def index():
@@ -533,6 +495,7 @@ def index():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    # ... (No changes in this function)
     if request.method == 'POST':
         username = request.form['username'].strip()
         password = request.form['password']
@@ -580,6 +543,7 @@ def register():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    # ... (No changes in this function)
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
@@ -634,13 +598,11 @@ def dashboard():
         
     conn.close()
     
-    # 日本株
     jp_stocks = assets['jp_stock']
     jp_total = sum(s['quantity'] * s['price'] for s in jp_stocks)
     jp_cost = sum(s['quantity'] * s['avg_cost'] for s in jp_stocks)
     jp_profit = jp_total - jp_cost
 
-    # 米国株
     us_stocks = assets['us_stock']
     usd_jpy = get_usd_jpy_rate()
     us_total_usd = sum(s['quantity'] * s['price'] for s in us_stocks)
@@ -649,37 +611,37 @@ def dashboard():
     us_total_jpy = us_total_usd * usd_jpy
     us_profit_jpy = us_profit_usd * usd_jpy
 
-    # 現金
     cash_items = assets['cash']
     cash_total = sum(i['quantity'] for i in cash_items)
     
-    # 金
     gold_items = assets['gold']
     gold_total = sum(i['quantity'] * i['price'] for i in gold_items)
     gold_cost = sum(i['quantity'] * i['avg_cost'] for i in gold_items)
     gold_profit = gold_total - gold_cost
 
-    # 暗号資産
     crypto_items = assets['crypto']
     crypto_total = sum(i['quantity'] * i['price'] for i in crypto_items)
     crypto_cost = sum(i['quantity'] * i['avg_cost'] for i in crypto_items)
     crypto_profit = crypto_total - crypto_cost
 
-    # 投資信託
     investment_trust_items = assets['investment_trust']
     it_total = sum((i['quantity'] * i['price'] / 10000) for i in investment_trust_items)
     it_cost = sum((i['quantity'] * i['avg_cost'] / 10000) for i in investment_trust_items)
     it_profit = it_total - it_cost
 
-    # 保険
     insurance_items = assets['insurance']
     insurance_total = sum(i['price'] for i in insurance_items)
     insurance_cost = sum(i['avg_cost'] for i in insurance_items)
     insurance_profit = insurance_total - insurance_cost
 
-    # 全資産合計
     total_assets = jp_total + us_total_jpy + cash_total + gold_total + crypto_total + it_total + insurance_total
     total_profit = jp_profit + us_profit_jpy + gold_profit + crypto_profit + it_profit + insurance_profit
+
+    # --- グラフ用データの作成 ---
+    chart_data = {
+        "labels": ["日本株", "米国株", "現金", "金", "暗号資産", "投資信託", "保険"],
+        "values": [jp_total, us_total_jpy, cash_total, gold_total, crypto_total, it_total, insurance_total]
+    }
 
     return render_template(
         'dashboard.html', 
@@ -706,9 +668,14 @@ def dashboard():
         insurance_total=insurance_total,
         insurance_profit=insurance_profit,
         total_assets=total_assets,
-        total_profit=total_profit
+        total_profit=total_profit,
+        chart_data=json.dumps(chart_data)  # JSON文字列として渡す
     )
 
+
+# ... (asset management routes, no changes) ...
+# The rest of the file remains the same
+# ... (rest of the file is omitted for brevity)
 
 @app.route('/assets/<asset_type>')
 def manage_assets(asset_type):
@@ -768,8 +735,6 @@ def add_asset():
     
     price = 0
     if asset_type == 'insurance':
-        # 保険の場合: price=解約返戻金, avg_cost=支払済保険料, quantity=保険金額, name=保険種類, symbol=項目名
-        # 各値はフォームから直接取得される
         price = float(request.form.get('price', 0)) if request.form.get('price') else 0
     elif asset_type == 'gold':
         price = get_gold_price()
@@ -812,13 +777,11 @@ def add_asset():
     existing = c.fetchone()
     
     if existing and asset_type not in ['cash', 'insurance']:
-        # 既存アセットに数量を追加する場合
         old_quantity = existing['quantity'] or 0
         old_avg_cost = existing['avg_cost'] or 0
         new_total_quantity = old_quantity + quantity
         
         if new_total_quantity > 0 and avg_cost > 0:
-            # 加重平均で新しい平均取得単価を計算
             new_avg_cost = ((old_quantity * old_avg_cost) + (quantity * avg_cost)) / new_total_quantity
         else:
             new_avg_cost = old_avg_cost if old_avg_cost > 0 else avg_cost
@@ -835,7 +798,6 @@ def add_asset():
         flash(f'{symbol} を更新しました', 'success')
 
     elif existing and asset_type == 'insurance':
-        # 保険は単純に上書き
         if USE_POSTGRES:
             c.execute('''UPDATE assets SET quantity = %s, price = %s, avg_cost = %s, name = %s WHERE id = %s''', 
                      (quantity, price, avg_cost, name, existing['id']))
@@ -844,7 +806,6 @@ def add_asset():
                      (quantity, price, avg_cost, name, existing['id']))
         flash(f'{symbol} を更新しました', 'success')
     elif existing and asset_type == 'cash':
-        # 現金は単純に上書き
         if USE_POSTGRES:
             c.execute('''UPDATE assets SET price = %s, avg_cost = %s, name = %s WHERE id = %s''', 
                      (price, avg_cost, name or symbol, existing['id']))
@@ -853,7 +814,6 @@ def add_asset():
                      (price, avg_cost, name or symbol, existing['id']))
         flash(f'{symbol} を更新しました', 'success')
     else:
-        # 新規追加
         if USE_POSTGRES:
             c.execute('''INSERT INTO assets (user_id, asset_type, symbol, name, quantity, price, avg_cost)
                         VALUES (%s, %s, %s, %s, %s, %s, %s)''',
@@ -938,10 +898,8 @@ def update_asset():
     if asset_type in ['us_stock', 'crypto']:
         symbol = symbol.upper()
 
-    # 価格取得ロジック
     price = 0
     if asset_type == 'insurance':
-        # 保険の場合: price = 解約返戻金(時価). 他の値はフォームから取得
         price = float(request.form.get('price', 0)) if request.form.get('price') else 0
     elif asset_type == 'gold':
         price = get_gold_price()
@@ -1097,7 +1055,6 @@ def update_all_prices():
     if not user:
         return redirect(url_for('login'))
 
-    # --- 1. 更新対象の全資産をDBから取得 ---
     conn = get_db()
     c = conn.cursor()
     asset_types_to_update = ['jp_stock', 'us_stock', 'gold', 'crypto', 'investment_trust']
@@ -1118,7 +1075,6 @@ def update_all_prices():
         flash('更新対象の資産がありません', 'success')
         return redirect(url_for('dashboard'))
 
-    # --- 2. 各資産の価格を取得する並列処理用の関数を定義 ---
     def fetch_price(asset):
         asset_type, symbol = asset['asset_type'], asset['symbol']
         price = 0
@@ -1133,24 +1089,19 @@ def update_all_prices():
             print(f"Error in worker for {symbol} ({asset_type}): {e}")
             return (asset['id'], 0)
 
-    # --- 3. ThreadPoolExecutorで並列処理を実行 ---
     updated_prices = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
         results = executor.map(fetch_price, all_assets)
         updated_prices = [
-            # (price, asset_id) の順にする
             (res[1], res[0]) for res in results if res and res[1] is not None and res[1] > 0
         ]
 
-    # --- 4. 取得した価格でDBを一括更新 ---
     if updated_prices:
         print(f"Updating {len(updated_prices)} assets in the database...")
         if USE_POSTGRES:
-            # PostgreSQLの場合: execute_valuesで一括UPDATE
             update_query = "UPDATE assets SET price = data.price FROM (VALUES %s) AS data(price, id) WHERE assets.id = data.id"
             execute_values(c, update_query, updated_prices)
         else:
-            # SQLiteの場合: executemanyで一件ずつ実行(これでもループよりは速い)
             c.executemany('UPDATE assets SET price = ? WHERE id = ?', updated_prices)
 
     conn.commit()

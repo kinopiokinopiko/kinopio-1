@@ -1,0 +1,27 @@
+portfolio_app/
+├── app.py                # エントリーポイント
+├── config.py             # 設定ファイル
+├── extensions.py         # DBやセキュリティなど拡張機能の初期化
+├── models/               # DBモデル
+│   └── user.py
+│   └── asset.py
+├── services/             # 外部サービス・価格取得ロジック
+│   └── stocks.py
+│   └── crypto.py
+│   └── gold.py
+│   └── investment.py
+│   └── fx.py
+├── routes/               # ブループリントごとのルーティング
+│   └── auth.py
+│   └── dashboard.py
+│   └── assets.py
+│   └── api.py
+├── templates/            # HTML テンプレート
+│   └── login.html
+│   └── register.html
+│   └── dashboard.html
+│   └── manage_assets.html
+│   └── edit_asset.html
+├── static/               # CSS, JS, 画像など
+│   └── style.css
+└── requirements.txt
