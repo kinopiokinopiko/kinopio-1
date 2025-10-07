@@ -52,6 +52,12 @@
         font-size: 18px;
         font-weight: 600;
     }
+
+    .summary-profit-percentage {
+        font-size: 14px;
+        opacity: 0.8;
+        margin-left: 6px;
+    }
     
     .profit-red { color: #dc3545; }
     .profit-green { color: #28a745; }
@@ -306,6 +312,12 @@
         font-size: 20px;
         font-weight: 700;
     }
+
+    .stock-profit-percentage {
+        font-size: 14px;
+        opacity: 0.8;
+        margin-left: 6px;
+    }
     
     .stock-actions {
         display: flex;
@@ -388,6 +400,7 @@
         {% endif %}
     {% endfor %}
     {% set total_profit = total_value.amount - total_cost.amount %}
+    {% set total_profit_rate = (total_profit / total_cost.amount * 100) if total_cost.amount > 0 else 0 %}
     
     <div class="summary-card">
         <div class="summary-title">{{ info.title }} 時価総額</div>
@@ -406,6 +419,7 @@
             {% else %}
                 &yen;{{ "{:,.0f}".format(total_profit) }}
             {% endif %}
+            <span class="summary-profit-percentage">({% if total_profit >= 0 %}+{% endif %}{{ "{:.2f}".format(total_profit_rate) }}%)</span>
         </div>
         {% endif %}
     </div>
@@ -422,7 +436,7 @@
             
             {% if asset_type == 'insurance' %}
                 <div class="form-group">
-                    <label for="symbol">項目名（例: ○○生命 終身保険）</label>
+                    <label for="symbol">項目名(例: ○○生命 終身保険)</label>
                     <input type="text" id="symbol" name="symbol" placeholder="項目名" required>
                 </div>
                 <div class="form-group">
@@ -589,10 +603,12 @@
         
         {% if asset_type == 'insurance' %}
             {% set profit = asset.price - asset.avg_cost %}
+            {% set profit_rate = (profit / asset.avg_cost * 100) if asset.avg_cost > 0 else 0 %}
             <div class="stock-profit-box">
                 <div class="stock-profit-label">損益</div>
                 <div class="stock-profit-value {% if profit >= 0 %}profit-red{% else %}profit-green{% endif %}">
                     {% if profit >= 0 %}+{% endif %}¥{{ "{:,.0f}".format(profit) }}
+                    <span class="stock-profit-percentage">({% if profit >= 0 %}+{% endif %}{{ "{:.2f}".format(profit_rate) }}%)</span>
                 </div>
             </div>
         {% elif asset_type not in ['cash'] %}
@@ -604,6 +620,7 @@
                 {% set cost_value = asset['quantity'] * asset['avg_cost'] %}
             {% endif %}
             {% set profit = current_value - cost_value %}
+            {% set profit_rate = (profit / cost_value * 100) if cost_value > 0 else 0 %}
             <div class="stock-profit-box">
                 <div class="stock-profit-label">損益</div>
                 <div class="stock-profit-value {% if profit >= 0 %}profit-red{% else %}profit-green{% endif %}">
@@ -613,6 +630,7 @@
                     {% else %}
                         &yen;{{ "{:,.0f}".format(profit) }}
                     {% endif %}
+                    <span class="stock-profit-percentage">({% if profit >= 0 %}+{% endif %}{{ "{:.2f}".format(profit_rate) }}%)</span>
                 </div>
             </div>
         {% endif %}
@@ -686,7 +704,7 @@ function updatePrices() {
     button.disabled = true;
     button.innerHTML = '更新中...';
     
-    if(confirm('価格を最新情報で更新しますか？時間がかかる場合があります。')) {
+    if(confirm('価格を最新情報で更新しますか?時間がかかる場合があります。')) {
         fetch('{{ url_for("update_prices") }}', {
             method: 'POST',
             headers: {
