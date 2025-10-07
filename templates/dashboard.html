@@ -94,6 +94,12 @@
         display: inline-block;
     }
 
+    .profit-percentage {
+        font-size: 16px;
+        opacity: 0.8;
+        margin-left: 8px;
+    }
+
     .chart-card {
         background: white;
         border-radius: 16px;
@@ -167,6 +173,11 @@
         font-weight: 600;
         margin-top: 8px;
     }
+
+    .card-profit-percentage {
+        font-size: 12px;
+        opacity: 0.8;
+    }
     
     @media (min-width: 768px) {
         .asset-grid {
@@ -189,7 +200,7 @@
 {% block content %}
 <div class="header-bar">
     <form method="post" action="{{ url_for('update_all_prices') }}" style="margin: 0;">
-        <button type="submit" class="icon-btn" onclick="return confirm('全ての価格を更新しますか？時間がかかる場合があります。')">
+        <button type="submit" class="icon-btn" onclick="return confirm('全ての価格を更新しますか?時間がかかる場合があります。')">
             <svg class="refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="23 4 23 10 17 10"></polyline>
                 <polyline points="1 20 1 14 7 14"></polyline>
@@ -211,8 +222,11 @@
     <div class="total-card">
         <div class="total-label">総資産</div>
         <div class="total-amount">¥{{ "{:,.0f}".format(total_assets) }}</div>
+        {% set total_cost = (jp_total - jp_profit) + (us_total_jpy - us_profit_jpy) + (gold_total - gold_profit) + (crypto_total - crypto_profit) + (investment_trust_total - investment_trust_profit) + (insurance_total - insurance_profit) %}
+        {% set total_profit_rate = (total_profit / total_cost * 100) if total_cost > 0 else 0 %}
         <div class="total-profit {% if total_profit >= 0 %}profit-plus{% else %}profit-minus{% endif %}">
             {% if total_profit >= 0 %}+{% endif %}¥{{ "{:,.0f}".format(total_profit) }}
+            <span class="profit-percentage">({% if total_profit >= 0 %}+{% endif %}{{ "{:.2f}".format(total_profit_rate) }}%)</span>
         </div>
     </div>
     <div class="chart-card">
@@ -227,8 +241,11 @@
         <div class="card-name">日本株</div>
         <div class="card-amount">¥{{ "{:,.0f}".format(jp_total) }}</div>
         <div class="card-detail">{{ jp_stocks|length }} 銘柄</div>
+        {% set jp_cost = jp_total - jp_profit %}
+        {% set jp_profit_rate = (jp_profit / jp_cost * 100) if jp_cost > 0 else 0 %}
         <div class="card-profit {% if jp_profit >= 0 %}profit-plus{% else %}profit-minus{% endif %}">
             {% if jp_profit >= 0 %}+{% endif %}¥{{ "{:,.0f}".format(jp_profit) }}
+            <div class="card-profit-percentage">({% if jp_profit >= 0 %}+{% endif %}{{ "{:.2f}".format(jp_profit_rate) }}%)</div>
         </div>
     </a>
     
@@ -237,8 +254,11 @@
         <div class="card-name">米国株</div>
         <div class="card-amount">¥{{ "{:,.0f}".format(us_total_jpy) }}</div>
         <div class="card-detail">${{ "{:,.2f}".format(us_total_usd) }} ({{ us_stocks|length }} 銘柄)</div>
+        {% set us_cost_jpy = us_total_jpy - us_profit_jpy %}
+        {% set us_profit_rate = (us_profit_jpy / us_cost_jpy * 100) if us_cost_jpy > 0 else 0 %}
         <div class="card-profit {% if us_profit_jpy >= 0 %}profit-plus{% else %}profit-minus{% endif %}">
             {% if us_profit_jpy >= 0 %}+{% endif %}¥{{ "{:,.0f}".format(us_profit_jpy) }}
+            <div class="card-profit-percentage">({% if us_profit_jpy >= 0 %}+{% endif %}{{ "{:.2f}".format(us_profit_rate) }}%)</div>
         </div>
     </a>
     
@@ -254,8 +274,11 @@
         <div class="card-name">金 (Gold)</div>
         <div class="card-amount">¥{{ "{:,.0f}".format(gold_total) }}</div>
         <div class="card-detail">{{ gold_items|length }} 項目</div>
+        {% set gold_cost = gold_total - gold_profit %}
+        {% set gold_profit_rate = (gold_profit / gold_cost * 100) if gold_cost > 0 else 0 %}
         <div class="card-profit {% if gold_profit >= 0 %}profit-plus{% else %}profit-minus{% endif %}">
             {% if gold_profit >= 0 %}+{% endif %}¥{{ "{:,.0f}".format(gold_profit) }}
+            <div class="card-profit-percentage">({% if gold_profit >= 0 %}+{% endif %}{{ "{:.2f}".format(gold_profit_rate) }}%)</div>
         </div>
     </a>
     
@@ -264,8 +287,11 @@
         <div class="card-name">暗号資産</div>
         <div class="card-amount">¥{{ "{:,.0f}".format(crypto_total) }}</div>
         <div class="card-detail">{{ crypto_items|length }} 項目</div>
+        {% set crypto_cost = crypto_total - crypto_profit %}
+        {% set crypto_profit_rate = (crypto_profit / crypto_cost * 100) if crypto_cost > 0 else 0 %}
         <div class="card-profit {% if crypto_profit >= 0 %}profit-plus{% else %}profit-minus{% endif %}">
             {% if crypto_profit >= 0 %}+{% endif %}¥{{ "{:,.0f}".format(crypto_profit) }}
+            <div class="card-profit-percentage">({% if crypto_profit >= 0 %}+{% endif %}{{ "{:.2f}".format(crypto_profit_rate) }}%)</div>
         </div>
     </a>
 
@@ -274,8 +300,11 @@
         <div class="card-name">投資信託</div>
         <div class="card-amount">¥{{ "{:,.0f}".format(investment_trust_total) }}</div>
         <div class="card-detail">{{ investment_trust_items|length }} 銘柄</div>
+        {% set it_cost = investment_trust_total - investment_trust_profit %}
+        {% set it_profit_rate = (investment_trust_profit / it_cost * 100) if it_cost > 0 else 0 %}
         <div class="card-profit {% if investment_trust_profit >= 0 %}profit-plus{% else %}profit-minus{% endif %}">
             {% if investment_trust_profit >= 0 %}+{% endif %}¥{{ "{:,.0f}".format(investment_trust_profit) }}
+            <div class="card-profit-percentage">({% if investment_trust_profit >= 0 %}+{% endif %}{{ "{:.2f}".format(it_profit_rate) }}%)</div>
         </div>
     </a>
 
@@ -284,8 +313,11 @@
         <div class="card-name">保険</div>
         <div class="card-amount">¥{{ "{:,.0f}".format(insurance_total) }}</div>
         <div class="card-detail">{{ insurance_items|length }} 件</div>
+        {% set insurance_cost = insurance_total - insurance_profit %}
+        {% set insurance_profit_rate = (insurance_profit / insurance_cost * 100) if insurance_cost > 0 else 0 %}
         <div class="card-profit {% if insurance_profit >= 0 %}profit-plus{% else %}profit-minus{% endif %}">
             {% if insurance_profit >= 0 %}+{% endif %}¥{{ "{:,.0f}".format(insurance_profit) }}
+            <div class="card-profit-percentage">({% if insurance_profit >= 0 %}+{% endif %}{{ "{:.2f}".format(insurance_profit_rate) }}%)</div>
         </div>
     </a>
 </div>
