@@ -85,6 +85,24 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users (id)
         )''')
         
+        # 資産履歴テーブル
+        c.execute('''CREATE TABLE IF NOT EXISTS asset_history (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER,
+            record_date DATE NOT NULL,
+            jp_stock_value REAL DEFAULT 0,
+            us_stock_value REAL DEFAULT 0,
+            cash_value REAL DEFAULT 0,
+            gold_value REAL DEFAULT 0,
+            crypto_value REAL DEFAULT 0,
+            investment_trust_value REAL DEFAULT 0,
+            insurance_value REAL DEFAULT 0,
+            total_value REAL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            UNIQUE(user_id, record_date)
+        )''')
+        
         # デフォルトユーザー作成
         c.execute("SELECT id FROM users WHERE username = 'demo'")
         if not c.fetchone():
@@ -111,6 +129,24 @@ def init_db():
             avg_cost REAL DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users (id)
+        )''')
+        
+        # 資産履歴テーブル
+        c.execute('''CREATE TABLE IF NOT EXISTS asset_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            record_date DATE NOT NULL,
+            jp_stock_value REAL DEFAULT 0,
+            us_stock_value REAL DEFAULT 0,
+            cash_value REAL DEFAULT 0,
+            gold_value REAL DEFAULT 0,
+            crypto_value REAL DEFAULT 0,
+            investment_trust_value REAL DEFAULT 0,
+            insurance_value REAL DEFAULT 0,
+            total_value REAL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            UNIQUE(user_id, record_date)
         )''')
         
         # デフォルトユーザー作成
@@ -177,8 +213,8 @@ def get_current_user():
     conn.close()
     return user
 
-_FULLWIDTH_TRANS = {ord(f): ord(t) for f, t in zip('０１２３４５６７８９', '0123456789')}
-_FULLWIDTH_TRANS.update({ord('，'): ord(','), ord('．'): ord('.'), ord('＋'): ord('+'), ord('－'): ord('-'), ord('　'): ord(' '), ord('％'): ord('%')})
+_FULLWIDTH_TRANS = {ord(f): ord(t) for f, t in zip('0123456789', '0123456789')}
+_FULLWIDTH_TRANS.update({ord(','): ord(','), ord('.'): ord('.'), ord('+'): ord('+'), ord('-'): ord('-'), ord(' '): ord(' '), ord('%'): ord('%')})
 
 
 def normalize_fullwidth(s):
@@ -245,7 +281,7 @@ def scrape_yahoo_finance_jp(code):
                         name = meta.get('shortName') or meta.get('longName') or f"Stock {code}"
 
                     if name:
-                        jp_suffixes = ['株式会社', '合同会社', '合名会社', '合資会社', '有限会社', '(株)', '（株）']
+                        jp_suffixes = ['株式会社', '合同会社', '合名会社', '合資会社', '有限会社', '(株)', '(株)']
                         for suffix in jp_suffixes:
                             name = name.replace(suffix, '')
                         
@@ -484,6 +520,76 @@ def get_usd_jpy_rate():
         print(f"Error getting USD/JPY rate: {e}")
         return 150.0
 
+
+def record_asset_snapshot(user_id):
+    """現在の資産状況を記録"""
+    conn = get_db()
+    c = conn.cursor()
+    
+    # 今日の日付を取得(日本時間)
+    jst = timezone(timedelta(hours=9))
+    today = datetime.now(jst).date()
+    
+    # 各資産タイプの合計値を計算
+    asset_types = ['jp_stock', 'us_stock', 'cash', 'gold', 'crypto', 'investment_trust', 'insurance']
+    values = {}
+    
+    for asset_type in asset_types:
+        if USE_POSTGRES:
+            c.execute('SELECT * FROM assets WHERE user_id = %s AND asset_type = %s', 
+                     (user_id, asset_type))
+        else:
+            c.execute('SELECT * FROM assets WHERE user_id = ? AND asset_type = ?', 
+                     (user_id, asset_type))
+        assets = c.fetchall()
+        
+        total = 0
+        if asset_type == 'us_stock':
+            usd_jpy = get_usd_jpy_rate()
+            total = sum(a['quantity'] * a['price'] for a in assets) * usd_jpy
+        elif asset_type == 'investment_trust':
+            total = sum((a['quantity'] * a['price'] / 10000) for a in assets)
+        elif asset_type == 'insurance':
+            total = sum(a['price'] for a in assets)
+        elif asset_type == 'cash':
+            total = sum(a['quantity'] for a in assets)
+        else:
+            total = sum(a['quantity'] * a['price'] for a in assets)
+        
+        values[asset_type] = total
+    
+    total_value = sum(values.values())
+    
+    # データを挿入または更新
+    if USE_POSTGRES:
+        c.execute('''INSERT INTO asset_history 
+                    (user_id, record_date, jp_stock_value, us_stock_value, cash_value, 
+                     gold_value, crypto_value, investment_trust_value, insurance_value, total_value)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (user_id, record_date) 
+                    DO UPDATE SET 
+                        jp_stock_value = EXCLUDED.jp_stock_value,
+                        us_stock_value = EXCLUDED.us_stock_value,
+                        cash_value = EXCLUDED.cash_value,
+                        gold_value = EXCLUDED.gold_value,
+                        crypto_value = EXCLUDED.crypto_value,
+                        investment_trust_value = EXCLUDED.investment_trust_value,
+                        insurance_value = EXCLUDED.insurance_value,
+                        total_value = EXCLUDED.total_value''',
+                 (user_id, today, values['jp_stock'], values['us_stock'], values['cash'],
+                  values['gold'], values['crypto'], values['investment_trust'], values['insurance'], total_value))
+    else:
+        c.execute('''INSERT OR REPLACE INTO asset_history 
+                    (user_id, record_date, jp_stock_value, us_stock_value, cash_value, 
+                     gold_value, crypto_value, investment_trust_value, insurance_value, total_value)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                 (user_id, today, values['jp_stock'], values['us_stock'], values['cash'],
+                  values['gold'], values['crypto'], values['investment_trust'], values['insurance'], total_value))
+    
+    conn.commit()
+    conn.close()
+
+
 init_db()
 
 @app.route('/')
@@ -495,7 +601,6 @@ def index():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    # ... (No changes in this function)
     if request.method == 'POST':
         username = request.form['username'].strip()
         password = request.form['password']
@@ -543,7 +648,6 @@ def register():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    # ... (No changes in this function)
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
@@ -595,7 +699,20 @@ def dashboard():
             c.execute('''SELECT * FROM assets WHERE user_id = ? AND asset_type = ?''', 
                       (user['id'], asset_type))
         assets[asset_type] = c.fetchall()
-        
+    
+    # 資産履歴を取得(過去30日分)
+    if USE_POSTGRES:
+        c.execute('''SELECT * FROM asset_history 
+                    WHERE user_id = %s 
+                    ORDER BY record_date DESC 
+                    LIMIT 30''', (user['id'],))
+    else:
+        c.execute('''SELECT * FROM asset_history 
+                    WHERE user_id = ? 
+                    ORDER BY record_date DESC 
+                    LIMIT 30''', (user['id'],))
+    
+    history = list(reversed(c.fetchall()))
     conn.close()
     
     jp_stocks = assets['jp_stock']
@@ -637,10 +754,23 @@ def dashboard():
     total_assets = jp_total + us_total_jpy + cash_total + gold_total + crypto_total + it_total + insurance_total
     total_profit = jp_profit + us_profit_jpy + gold_profit + crypto_profit + it_profit + insurance_profit
 
-    # --- グラフ用データの作成 ---
+    # グラフ用データの作成
     chart_data = {
         "labels": ["日本株", "米国株", "現金", "金", "暗号資産", "投資信託", "保険"],
         "values": [jp_total, us_total_jpy, cash_total, gold_total, crypto_total, it_total, insurance_total]
+    }
+    
+    # 履歴グラフ用データの作成
+    history_data = {
+        "dates": [str(h['record_date']) for h in history],
+        "jp_stock": [float(h['jp_stock_value']) for h in history],
+        "us_stock": [float(h['us_stock_value']) for h in history],
+        "cash": [float(h['cash_value']) for h in history],
+        "gold": [float(h['gold_value']) for h in history],
+        "crypto": [float(h['crypto_value']) for h in history],
+        "investment_trust": [float(h['investment_trust_value']) for h in history],
+        "insurance": [float(h['insurance_value']) for h in history],
+        "total": [float(h['total_value']) for h in history]
     }
 
     return render_template(
@@ -669,13 +799,10 @@ def dashboard():
         insurance_profit=insurance_profit,
         total_assets=total_assets,
         total_profit=total_profit,
-        chart_data=json.dumps(chart_data)  # JSON文字列として渡す
+        chart_data=json.dumps(chart_data),
+        history_data=json.dumps(history_data)
     )
 
-
-# ... (asset management routes, no changes) ...
-# The rest of the file remains the same
-# ... (rest of the file is omitted for brevity)
 
 @app.route('/assets/<asset_type>')
 def manage_assets(asset_type):
@@ -827,6 +954,9 @@ def add_asset():
     conn.commit()
     conn.close()
     
+    # 資産スナップショットを記録
+    record_asset_snapshot(user['id'])
+    
     return redirect(url_for('manage_assets', asset_type=asset_type))
 
 
@@ -941,6 +1071,9 @@ def update_asset():
     conn.commit()
     conn.close()
     
+    # 資産スナップショットを記録
+    record_asset_snapshot(user['id'])
+    
     flash(f'{symbol} を更新しました', 'success')
     return redirect(url_for('manage_assets', asset_type=asset_type))
 
@@ -978,6 +1111,9 @@ def delete_asset():
         asset_type = 'jp_stock'
     
     conn.close()
+    
+    # 資産スナップショットを記録
+    record_asset_snapshot(user['id'])
     
     return redirect(url_for('manage_assets', asset_type=asset_type))
 
@@ -1106,6 +1242,9 @@ def update_all_prices():
 
     conn.commit()
     conn.close()
+    
+    # 資産スナップショットを記録
+    record_asset_snapshot(user['id'])
     
     flash(f'全{len(all_assets)}件の資産価格を更新しました({len(updated_prices)}件成功)', 'success')
     return redirect(url_for('dashboard'))
