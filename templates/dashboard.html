@@ -200,7 +200,7 @@
 {% block content %}
 <div class="header-bar">
     <form method="post" action="{{ url_for('update_all_prices') }}" style="margin: 0;">
-        <button type="submit" class="icon-btn" onclick="return confirm('全ての価格を更新しますか?時間がかかる場合があります。')">
+        <button type="submit" class="icon-btn" onclick="return confirm('全ての価格を手動で更新しますか?時間がかかる場合があります。')">
             <svg class="refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="23 4 23 10 17 10"></polyline>
                 <polyline points="1 20 1 14 7 14"></polyline>
@@ -234,6 +234,9 @@
     </div>
 </div>
 
+<div class="chart-card" style="margin-bottom: 24px; height: 400px;">
+    <canvas id="assetHistoryChart"></canvas>
+</div>
 
 <div class="asset-grid">
     <a href="{{ url_for('manage_assets', asset_type='jp_stock') }}" class="asset-card">
@@ -324,73 +327,160 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+
 <script>
+// ラベル表示用プラグインをChart.jsに登録
+Chart.register(ChartDataLabels);
+
 document.addEventListener('DOMContentLoaded', function() {
     const chartDataJSON = '{{ chart_data | safe }}';
+    const historyDataJSON = '{{ history_data | safe }}';
+
+    // 円グラフと棒グラフで共通の、新しい鮮やかな色設定
+    const assetColors = [
+        '#E63946', // 日本株 (Vibrant Red)
+        '#457B9D', // 米国株 (Vibrant Blue)
+        '#F4A261', // 現金 (Vibrant Orange)
+        '#E9C46A', // 金 (Vibrant Yellow)
+        '#9B5DE5', // 暗号資産 (Vibrant Purple)
+        '#52B788', // 投資信託 (Vibrant Green)
+        '#F15BB5'  // 保険 (Vibrant Pink)
+    ];
+
+    // 資産ポートフォリオ円グラフ
     if (chartDataJSON) {
         const chartData = JSON.parse(chartDataJSON);
         
         const filteredLabels = [];
         const filteredValues = [];
+        const filteredColors = [];
         chartData.values.forEach((value, index) => {
             if (value > 0) {
                 filteredLabels.push(chartData.labels[index]);
                 filteredValues.push(value);
+                filteredColors.push(assetColors[index]);
             }
         });
 
         if (filteredValues.length > 0) {
-            const ctx = document.getElementById('assetPieChart').getContext('2d');
-            new Chart(ctx, {
+            const ctxPie = document.getElementById('assetPieChart').getContext('2d');
+            new Chart(ctxPie, {
                 type: 'pie',
                 data: {
                     labels: filteredLabels,
                     datasets: [{
-                        label: '資産割合',
                         data: filteredValues,
-                        backgroundColor: [
-                            '#4CAF50', '#2196F3', '#FFC107', '#00BCD4', 
-                            '#9C27B0', '#FF9800', '#795548'
-                        ],
-                        borderWidth: 1,
-                        borderColor: '#fff'
+                        backgroundColor: filteredColors,
+                        borderColor: '#fff',
+                        borderWidth: 2,
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
+                        // 従来の凡例は非表示にする
                         legend: {
-                            position: 'right',
-                            labels: {
-                                boxWidth: 20,
-                                padding: 15,
-                                font: {
-                                    size: 14
-                                }
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    if (context.parsed !== null) {
-                                        const total = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
-                                        const percentage = ((context.parsed / total) * 100).toFixed(1);
-                                        label += new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(context.parsed) + ` (${percentage}%)`;
-                                    }
-                                    return label;
-                                }
-                            }
+                            display: false
                         },
                         title: {
                             display: true,
                             text: '資産ポートフォリオ',
+                            font: { size: 16 }
+                        },
+                        // グラフ内にラベルを表示するための設定
+                        datalabels: {
+                            formatter: (value, context) => {
+                                const datapoints = context.chart.data.datasets[0].data;
+                                const total = datapoints.reduce((total, datapoint) => total + datapoint, 0);
+                                const percentage = (value / total) * 100;
+                                // 割合が小さすぎるラベルは非表示にして見やすくする
+                                if (percentage < 3) {
+                                    return '';
+                                }
+                                const label = context.chart.data.labels[context.dataIndex];
+                                return `${percentage.toFixed(2)}%\n${label}`;
+                            },
+                            color: '#fff',
+                            textAlign: 'center',
                             font: {
-                                size: 16
+                                weight: 'bold',
+                                size: 12,
+                            },
+                            // 文字に影を付けて読みやすくする
+                            textShadowBlur: 6,
+                            textShadowColor: 'rgba(0, 0, 0, 0.5)'
+                        },
+                        tooltip: {
+                             callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) label += ': ';
+                                    const value = context.parsed;
+                                    label += new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(value);
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    // 資産推移グラフ（積み上げ棒グラフ）
+    if (historyDataJSON) {
+        const historyData = JSON.parse(historyDataJSON);
+        if (historyData.dates && historyData.dates.length > 0) {
+            const ctxHistory = document.getElementById('assetHistoryChart').getContext('2d');
+            
+            // ★★★ 棒グラフを極限まで細くするための設定 ★★★
+            const barThicknessOptions = {
+                barPercentage: 0.2, // カテゴリ内の棒が占める割合（値を小さくして細くしました）
+                categoryPercentage: 0.5 // カテゴリ全体が占める割合（値を小さくして間隔を広げました）
+            };
+
+            new Chart(ctxHistory, {
+                type: 'bar',
+                data: {
+                    labels: historyData.dates,
+                    datasets: [
+                        { label: '日本株', data: historyData.jp_stock, backgroundColor: assetColors[0], ...barThicknessOptions },
+                        { label: '米国株', data: historyData.us_stock, backgroundColor: assetColors[1], ...barThicknessOptions },
+                        { label: '現金', data: historyData.cash, backgroundColor: assetColors[2], ...barThicknessOptions },
+                        { label: '金', data: historyData.gold, backgroundColor: assetColors[3], ...barThicknessOptions },
+                        { label: '暗号資産', data: historyData.crypto, backgroundColor: assetColors[4], ...barThicknessOptions },
+                        { label: '投資信託', data: historyData.investment_trust, backgroundColor: assetColors[5], ...barThicknessOptions },
+                        { label: '保険', data: historyData.insurance, backgroundColor: assetColors[6], ...barThicknessOptions }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: { display: true, text: '資産推移', font: { size: 16 } },
+                        tooltip: { 
+                            mode: 'nearest', 
+                            intersect: true 
+                        },
+                        legend: { position: 'bottom' },
+                        // 棒グラフではラベル表示プラグインを無効化
+                        datalabels: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: { stacked: true },
+                        y: {
+                            stacked: true,
+                            ticks: {
+                                callback: function(value) {
+                                    if (value >= 100000000) return '¥' + (value / 100000000).toFixed(1) + '億';
+                                    if (value >= 10000) return '¥' + (value / 10000).toLocaleString() + '万';
+                                    return '¥' + value.toLocaleString();
+                                }
                             }
                         }
                     }
