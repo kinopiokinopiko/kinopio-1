@@ -7,8 +7,9 @@ psycopg2-binary==2.9.9
 lxml==4.9.3
 httpx
 hypercorn
-APScheduler
+APScheduler==3.10.4
 pytz
+
 
 
 
