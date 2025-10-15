@@ -11,6 +11,16 @@ import time
 from decimal import Decimal, InvalidOperation
 import concurrent.futures
 import threading
+import logging
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+
+# ログ設定
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # PostgreSQLサポート
 try:
@@ -175,23 +185,23 @@ def keep_alive():
     app_url = os.environ.get('RENDER_EXTERNAL_URL')
     
     if not app_url:
-        print("RENDER_EXTERNAL_URL is not set. Keep-alive thread will not run.")
+        logger.info("RENDER_EXTERNAL_URL is not set. Keep-alive thread will not run.")
         return
 
     ping_url = f"{app_url}/ping"
     
     while True:
         try:
-            print("Sending keep-alive ping...")
+            logger.info("Sending keep-alive ping...")
             requests.get(ping_url, timeout=10)
-            print("Keep-alive ping successful.")
+            logger.info("Keep-alive ping successful.")
         except requests.exceptions.RequestException as e:
-            print(f"Keep-alive ping failed: {e}")
+            logger.error(f"Keep-alive ping failed: {e}")
         
         time.sleep(840)
 
 if os.environ.get('RENDER'):
-    print("Starting keep-alive thread for Render...")
+    logger.info("Starting keep-alive thread for Render...")
     keep_alive_thread = threading.Thread(target=keep_alive, daemon=True)
     keep_alive_thread.start()
 
@@ -296,12 +306,12 @@ def scrape_yahoo_finance_jp(code):
                         return {'name': name, 'price': round(float(price), 2)}
 
             except Exception as e:
-                print(f"API parsing error for {code}: {e}")
+                logger.error(f"API parsing error for {code}: {e}")
         
         return {'name': f'Stock {code}', 'price': 0}
         
     except Exception as e:
-        print(f"Error getting JP stock {code}: {e}")
+        logger.error(f"Error getting JP stock {code}: {e}")
         return {'name': f'Stock {code}', 'price': 0}
 
 def scrape_yahoo_finance_us(symbol):
@@ -335,12 +345,12 @@ def scrape_yahoo_finance_us(symbol):
                     if price > 0:
                         return {'name': name, 'price': round(float(price), 2)}
             except Exception as e:
-                print(f"API parsing error for {symbol}: {e}")
+                logger.error(f"API parsing error for {symbol}: {e}")
         
         return {'name': symbol.upper(), 'price': 0}
         
     except Exception as e:
-        print(f"Error getting US stock {symbol}: {e}")
+        logger.error(f"Error getting US stock {symbol}: {e}")
         return {'name': symbol.upper(), 'price': 0}
 
 def get_jp_stock_info(code):
@@ -365,7 +375,7 @@ def get_crypto_price(symbol):
     try:
         symbol = (symbol or '').upper()
         if symbol not in CRYPTO_SYMBOLS:
-            print(f"Unsupported crypto symbol requested: {symbol}")
+            logger.warning(f"Unsupported crypto symbol requested: {symbol}")
             return 0.0
 
         url = f"https://cc.minkabu.jp/pair/{symbol}_JPY"
@@ -382,7 +392,7 @@ def get_crypto_price(symbol):
                 val = extract_number_from_string(jm)
                 if val is not None and val > 0:
                     if DEBUG_CRYPTO:
-                        print(f"[DEBUG] Found price in JSON-like field: {jm} -> {val}")
+                        logger.debug(f"Found price in JSON-like field: {jm} -> {val}")
                     return round(val, 2)
 
         idx = text.find('現在値')
@@ -415,7 +425,7 @@ def get_crypto_price(symbol):
                 val = extract_number_from_string(txt)
                 if val is not None and val > 0:
                     if DEBUG_CRYPTO:
-                        print(f"[DEBUG] Found price by selector {sel}: {txt} -> {val}")
+                        logger.debug(f"Found price by selector {sel}: {txt} -> {val}")
                     return round(val, 2)
 
         normalized = normalize_fullwidth(text)
@@ -433,15 +443,15 @@ def get_crypto_price(symbol):
             val = extract_number_from_string(m2.group(1))
             if val is not None and val > 0:
                 if DEBUG_CRYPTO:
-                    print(f"[DEBUG] Found price by scientific notation: {m2.group(1)} -> {val}")
+                    logger.debug(f"Found price by scientific notation: {m2.group(1)} -> {val}")
                 return round(val, 2)
 
         if DEBUG_CRYPTO:
             snippet = text[:1200].replace('\n', ' ')
-            print(f"[DEBUG] Failed to parse crypto price for {symbol}. Dumping small snippet:\n{snippet}\n--- end snippet ---")
+            logger.debug(f"Failed to parse crypto price for {symbol}. Dumping small snippet:\n{snippet}\n--- end snippet ---")
         return 0.0
     except Exception as e:
-        print(f"Error getting crypto price for {symbol}: {e}")
+        logger.error(f"Error getting crypto price for {symbol}: {e}")
         return 0.0
 
 def get_gold_price():
@@ -463,12 +473,12 @@ def get_gold_price():
                     return int(price_match.group(1).replace(",", ""))
         return 0
     except Exception as e:
-        print(f"Error getting gold price: {e}")
+        logger.error(f"Error getting gold price: {e}")
         return 0
 
 def get_investment_trust_price(symbol):
     if symbol not in INVESTMENT_TRUST_INFO:
-        print(f"Unsupported investment trust symbol: {symbol}")
+        logger.warning(f"Unsupported investment trust symbol: {symbol}")
         return 0.0
 
     url = INVESTMENT_TRUST_INFO[symbol]
@@ -492,11 +502,11 @@ def get_investment_trust_price(symbol):
                 if price is not None:
                     return price
 
-        print(f"Could not find the price for {symbol} on the page. The website structure may have changed.")
+        logger.warning(f"Could not find the price for {symbol} on the page. The website structure may have changed.")
         return 0.0
 
     except Exception as e:
-        print(f"Error scraping investment trust price for {symbol}: {e}")
+        logger.error(f"Error scraping investment trust price for {symbol}: {e}")
         return 0.0
 
 
@@ -517,7 +527,7 @@ def get_usd_jpy_rate():
         
         return 150.0
     except Exception as e:
-        print(f"Error getting USD/JPY rate: {e}")
+        logger.error(f"Error getting USD/JPY rate: {e}")
         return 150.0
 
 
@@ -588,6 +598,146 @@ def record_asset_snapshot(user_id):
     
     conn.commit()
     conn.close()
+
+
+def update_user_prices(user_id):
+    """特定ユーザーの全資産価格を更新"""
+    try:
+        logger.info(f"Starting price update for user {user_id}")
+        
+        conn = get_db()
+        c = conn.cursor()
+        asset_types_to_update = ['jp_stock', 'us_stock', 'gold', 'crypto', 'investment_trust']
+        
+        query_placeholder = ', '.join(['%s'] * len(asset_types_to_update)) if USE_POSTGRES else ', '.join(['?'] * len(asset_types_to_update))
+        
+        if USE_POSTGRES:
+            c.execute(f'SELECT id, symbol, asset_type FROM assets WHERE user_id = %s AND asset_type IN ({query_placeholder})',
+                      [user_id] + asset_types_to_update)
+        else:
+            c.execute(f'SELECT id, symbol, asset_type FROM assets WHERE user_id = ? AND asset_type IN ({query_placeholder})',
+                      [user_id] + asset_types_to_update)
+        
+        all_assets = c.fetchall()
+        
+        if not all_assets:
+            logger.info(f"No assets to update for user {user_id}")
+            conn.close()
+            return 0
+
+        def fetch_price(asset):
+            asset_type, symbol = asset['asset_type'], asset['symbol']
+            price = 0
+            try:
+                if asset_type == 'jp_stock': 
+                    price = get_stock_price(symbol, is_jp=True)
+                elif asset_type == 'us_stock': 
+                    price = get_stock_price(symbol, is_jp=False)
+                elif asset_type == 'gold': 
+                    price = get_gold_price()
+                elif asset_type == 'crypto': 
+                    price = get_crypto_price(symbol)
+                elif asset_type == 'investment_trust': 
+                    price = get_investment_trust_price(symbol)
+                return (asset['id'], price)
+            except Exception as e:
+                logger.error(f"Error in worker for {symbol} ({asset_type}): {e}")
+                return (asset['id'], 0)
+
+        updated_prices = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+            results = executor.map(fetch_price, all_assets)
+            updated_prices = [
+                (res[1], res[0]) for res in results if res and res[1] is not None and res[1] > 0
+            ]
+
+        if updated_prices:
+            logger.info(f"Updating {len(updated_prices)} assets in the database for user {user_id}...")
+            if USE_POSTGRES:
+                update_query = "UPDATE assets SET price = data.price FROM (VALUES %s) AS data(price, id) WHERE assets.id = data.id"
+                execute_values(c, update_query, updated_prices)
+            else:
+                c.executemany('UPDATE assets SET price = ? WHERE id = ?', updated_prices)
+
+        conn.commit()
+        conn.close()
+        
+        logger.info(f"Price update completed for user {user_id}: {len(updated_prices)}/{len(all_assets)} assets updated")
+        return len(updated_prices)
+        
+    except Exception as e:
+        logger.error(f"Error updating prices for user {user_id}: {e}")
+        return 0
+
+
+def scheduled_update_all_prices():
+    """スケジュール実行: 全ユーザーの資産価格を更新し、スナップショットを記録"""
+    try:
+        logger.info("=" * 50)
+        logger.info("Starting scheduled price update for all users")
+        logger.info("=" * 50)
+        
+        conn = get_db()
+        c = conn.cursor()
+        
+        # 全ユーザーを取得
+        c.execute('SELECT id, username FROM users')
+        users = c.fetchall()
+        conn.close()
+        
+        if not users:
+            logger.warning("No users found in database")
+            return
+        
+        logger.info(f"Found {len(users)} users to update")
+        
+        total_updated = 0
+        for user in users:
+            user_id = user['id']
+            username = user['username']
+            
+            logger.info(f"Processing user: {username} (ID: {user_id})")
+            
+            # 価格を更新
+            updated_count = update_user_prices(user_id)
+            total_updated += updated_count
+            
+            # スナップショットを記録
+            try:
+                record_asset_snapshot(user_id)
+                logger.info(f"Asset snapshot recorded for user {username}")
+            except Exception as e:
+                logger.error(f"Failed to record snapshot for user {username}: {e}")
+            
+            # レート制限を避けるため、ユーザー間で少し待機
+            time.sleep(2)
+        
+        logger.info("=" * 50)
+        logger.info(f"Scheduled update completed: {total_updated} assets updated across {len(users)} users")
+        logger.info("=" * 50)
+        
+    except Exception as e:
+        logger.error(f"Critical error in scheduled_update_all_prices: {e}", exc_info=True)
+
+
+# スケジューラーの初期化
+scheduler = BackgroundScheduler(timezone='Asia/Tokyo')
+
+# 毎日23:58に実行
+scheduler.add_job(
+    func=scheduled_update_all_prices,
+    trigger=CronTrigger(hour=23, minute=58, timezone='Asia/Tokyo'),
+    id='daily_price_update',
+    name='Daily Price Update at 23:58 JST',
+    replace_existing=True
+)
+
+# スケジューラー開始
+try:
+    scheduler.start()
+    logger.info("Scheduler started successfully. Daily updates scheduled for 23:58 JST")
+except Exception as e:
+    logger.error(f"Failed to start scheduler: {e}")
 
 
 init_db()
@@ -1156,7 +1306,7 @@ def update_prices():
                         c.execute('UPDATE assets SET price = ?, name = ? WHERE id = ?', (price, name, asset['id']))
                 time.sleep(0.5)
             except Exception as e:
-                 print(f"Failed to update info for {asset['symbol']} ({asset_type}): {e}")
+                 logger.error(f"Failed to update info for {asset['symbol']} ({asset_type}): {e}")
     else:
         update_funcs = {
             'gold': get_gold_price,
@@ -1178,7 +1328,7 @@ def update_prices():
                         c.execute('UPDATE assets SET price = ? WHERE id = ?', (price, asset['id']))
                 time.sleep(0.5)
             except Exception as e:
-                print(f"Failed to update price for {asset['symbol']} ({asset_type}): {e}")
+                logger.error(f"Failed to update price for {asset['symbol']} ({asset_type}): {e}")
             
     conn.commit()
     conn.close()
@@ -1191,63 +1341,20 @@ def update_all_prices():
     if not user:
         return redirect(url_for('login'))
 
-    conn = get_db()
-    c = conn.cursor()
-    asset_types_to_update = ['jp_stock', 'us_stock', 'gold', 'crypto', 'investment_trust']
-    
-    query_placeholder = ', '.join(['%s'] * len(asset_types_to_update)) if USE_POSTGRES else ', '.join(['?'] * len(asset_types_to_update))
-    
-    if USE_POSTGRES:
-        c.execute(f'SELECT id, symbol, asset_type FROM assets WHERE user_id = %s AND asset_type IN ({query_placeholder})',
-                  [user['id']] + asset_types_to_update)
-    else:
-        c.execute(f'SELECT id, symbol, asset_type FROM assets WHERE user_id = ? AND asset_type IN ({query_placeholder})',
-                  [user['id']] + asset_types_to_update)
-    
-    all_assets = c.fetchall()
-    
-    if not all_assets:
-        conn.close()
-        flash('更新対象の資産がありません', 'success')
-        return redirect(url_for('dashboard'))
-
-    def fetch_price(asset):
-        asset_type, symbol = asset['asset_type'], asset['symbol']
-        price = 0
-        try:
-            if asset_type == 'jp_stock': price = get_stock_price(symbol, is_jp=True)
-            elif asset_type == 'us_stock': price = get_stock_price(symbol, is_jp=False)
-            elif asset_type == 'gold': price = get_gold_price()
-            elif asset_type == 'crypto': price = get_crypto_price(symbol)
-            elif asset_type == 'investment_trust': price = get_investment_trust_price(symbol)
-            return (asset['id'], price)
-        except Exception as e:
-            print(f"Error in worker for {symbol} ({asset_type}): {e}")
-            return (asset['id'], 0)
-
-    updated_prices = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-        results = executor.map(fetch_price, all_assets)
-        updated_prices = [
-            (res[1], res[0]) for res in results if res and res[1] is not None and res[1] > 0
-        ]
-
-    if updated_prices:
-        print(f"Updating {len(updated_prices)} assets in the database...")
-        if USE_POSTGRES:
-            update_query = "UPDATE assets SET price = data.price FROM (VALUES %s) AS data(price, id) WHERE assets.id = data.id"
-            execute_values(c, update_query, updated_prices)
-        else:
-            c.executemany('UPDATE assets SET price = ? WHERE id = ?', updated_prices)
-
-    conn.commit()
-    conn.close()
+    # 現在のユーザーの価格を更新
+    updated_count = update_user_prices(user['id'])
     
     # 資産スナップショットを記録
     record_asset_snapshot(user['id'])
     
-    flash(f'全{len(all_assets)}件の資産価格を更新しました({len(updated_prices)}件成功)', 'success')
+    flash(f'資産価格を更新しました({updated_count}件成功)', 'success')
     return redirect(url_for('dashboard'))
+
+
+# アプリケーション終了時にスケジューラーをシャットダウン
+import atexit
+atexit.register(lambda: scheduler.shutdown())
+
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
