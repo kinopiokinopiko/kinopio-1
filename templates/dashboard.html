@@ -598,6 +598,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 });
 
+                const lineCheckboxes = document.querySelectorAll('.line-toggle');
+                const checkboxColors = [totalAssetColor, ...assetColors];
+                lineCheckboxes.forEach(checkbox => {
+                    const index = parseInt(checkbox.dataset.datasetIndex);
+                    if (index < checkboxColors.length) {
+                        checkbox.style.accentColor = checkboxColors[index];
+                    }
+                });
+
                 // 2. 折れ線グラフ (チェックボックス対応)
                 const datasetConfigs = [
                     { label: '総資産', data: historyData.total, color: totalAssetColor, hidden: false },
