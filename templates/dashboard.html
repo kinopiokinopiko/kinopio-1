@@ -467,40 +467,49 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             const historyData = JSON.parse(historyDataJSON);
             if (historyData.dates && historyData.dates.length > 0) {
-                
-                // 1. 積み上げ棒グラフ
-                const ctxHistoryBar = document.getElementById('assetHistoryChart').getContext('2d');
-                new Chart(ctxHistoryBar, {
+                // 1. 棒グラフ
+                const ctxHistory = document.getElementById('assetHistoryChart').getContext('2d');
+                const barThicknessOptions = {
+                    barPercentage: 0.2,
+                    categoryPercentage: 0.5
+                };
+                new Chart(ctxHistory, {
                     type: 'bar',
                     data: {
                         labels: historyData.dates,
                         datasets: [
-                            { label: '日本株', data: historyData.jp_stock, backgroundColor: assetColors[0]},
-                            { label: '米国株', data: historyData.us_stock, backgroundColor: assetColors[1]},
-                            { label: '現金', data: historyData.cash, backgroundColor: assetColors[2]},
-                            { label: '金', data: historyData.gold, backgroundColor: assetColors[3]},
-                            { label: '暗号資産', data: historyData.crypto, backgroundColor: assetColors[4]},
-                            { label: '投資信託', data: historyData.investment_trust, backgroundColor: assetColors[5]},
-                            { label: '保険', data: historyData.insurance, backgroundColor: assetColors[6]}
+                            { label: '日本株', data: historyData.jp_stock, backgroundColor: assetColors[0], ...barThicknessOptions },
+                            { label: '米国株', data: historyData.us_stock, backgroundColor: assetColors[1], ...barThicknessOptions },
+                            { label: '現金', data: historyData.cash, backgroundColor: assetColors[2], ...barThicknessOptions },
+                            { label: '金', data: historyData.gold, backgroundColor: assetColors[3], ...barThicknessOptions },
+                            { label: '暗号資産', data: historyData.crypto, backgroundColor: assetColors[4], ...barThicknessOptions },
+                            { label: '投資信託', data: historyData.investment_trust, backgroundColor: assetColors[5], ...barThicknessOptions },
+                            { label: '保険', data: historyData.insurance, backgroundColor: assetColors[6], ...barThicknessOptions }
                         ]
                     },
                     options: {
-                        responsive: true, maintainAspectRatio: false,
+                        responsive: true,
+                        maintainAspectRatio: false,
                         plugins: {
-                            title: { display: true, text: '資産推移 (棒グラフ)', font: { size: 16 } },
-                            tooltip: { mode: 'index', intersect: false },
+                            title: { display: true, text: '資産推移', font: { size: 16 } },
+                            tooltip: { 
+                                mode: 'nearest', 
+                                intersect: true 
+                            },
                             legend: { position: 'bottom' },
-                            datalabels: { display: false }
+                            datalabels: {
+                                display: false
+                            }
                         },
                         scales: {
                             x: { stacked: true },
                             y: {
                                 stacked: true,
                                 ticks: {
-                                    callback: (value) => {
-                                        if (value >= 1e8) return `¥${(value / 1e8).toFixed(1)}億`;
-                                        if (value >= 1e4) return `¥${(value / 1e4).toLocaleString()}万`;
-                                        return `¥${value.toLocaleString()}`;
+                                    callback: function(value) {
+                                        if (value >= 100000000) return '¥' + (value / 100000000).toFixed(1) + '億';
+                                        if (value >= 10000) return '¥' + (value / 10000).toLocaleString() + '万';
+                                        return '¥' + value.toLocaleString();
                                     }
                                 }
                             }
