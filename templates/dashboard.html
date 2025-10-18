@@ -237,7 +237,6 @@
         cursor: pointer;
         user-select: none;
     }
-    /* ★★★ 変更点 ★★★ チェックボックスを非表示にする */
     .legend-controls input[type="checkbox"] {
         display: none;
     }
@@ -246,7 +245,7 @@
         height: 14px;
         margin-right: 6px;
         border-radius: 3px;
-        transition: opacity 0.2s ease; /* ★★★ 追加点 ★★★ スムーズな変化のため */
+        transition: opacity 0.2s ease;
     }
 
     .chart-canvas-container {
@@ -326,6 +325,40 @@
         </div>
 
         <div id="bar-content" class="tab-content">
+            <div class="legend-controls">
+                <label class="legend-item">
+                    <input type="checkbox" id="toggle-all-bars" checked>
+                    <b>すべて選択</b>
+                </label>
+                <label class="legend-item">
+                    <input type="checkbox" class="bar-toggle" data-dataset-index="0" checked>
+                    <span class="legend-color-box" style="background-color: #E63946;"></span>日本株
+                </label>
+                <label class="legend-item">
+                    <input type="checkbox" class="bar-toggle" data-dataset-index="1" checked>
+                    <span class="legend-color-box" style="background-color: #457B9D;"></span>米国株
+                </label>
+                <label class="legend-item">
+                    <input type="checkbox" class="bar-toggle" data-dataset-index="2" checked>
+                    <span class="legend-color-box" style="background-color: #F4A261;"></span>現金
+                </label>
+                <label class="legend-item">
+                    <input type="checkbox" class="bar-toggle" data-dataset-index="3" checked>
+                    <span class="legend-color-box" style="background-color: #E9C46A;"></span>金
+                </label>
+                <label class="legend-item">
+                    <input type="checkbox" class="bar-toggle" data-dataset-index="4" checked>
+                    <span class="legend-color-box" style="background-color: #9B5DE5;"></span>暗号資産
+                </label>
+                <label class="legend-item">
+                    <input type="checkbox" class="bar-toggle" data-dataset-index="5" checked>
+                    <span class="legend-color-box" style="background-color: #52B788;"></span>投資信託
+                </label>
+                <label class="legend-item">
+                    <input type="checkbox" class="bar-toggle" data-dataset-index="6" checked>
+                    <span class="legend-color-box" style="background-color: #F15BB5;"></span>保険
+                </label>
+            </div>
             <div class="chart-canvas-container">
                 <canvas id="assetHistoryChart"></canvas>
             </div>
@@ -497,7 +530,7 @@ Chart.register(ChartDataLabels);
 document.addEventListener('DOMContentLoaded', function() {
     const chartDataJSON = '{{ chart_data | safe }}';
     const historyDataJSON = '{{ history_data | safe }}';
-    let myLineChart; 
+    let myLineChart, myBarChart; 
 
     const assetColors = [
         '#E63946', '#457B9D', '#F4A261', '#E9C46A', 
@@ -579,7 +612,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     barPercentage: 0.2,
                     categoryPercentage: 0.5
                 };
-                new Chart(ctxHistory, {
+                myBarChart = new Chart(ctxHistory, { // ★★★ インスタンスを保存
                     type: 'bar',
                     data: {
                         labels: historyData.dates,
@@ -598,8 +631,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         maintainAspectRatio: false,
                         plugins: {
                             title: { display: true, text: '資産推移', font: { size: 16 } },
-                            tooltip: { mode: 'nearest', intersect: true },
-                            legend: { position: 'bottom' },
+                            tooltip: { mode: 'index', intersect: false },
+                            legend: { display: false }, // ★★★ 凡例を非表示に
                             datalabels: { display: false }
                         },
                         scales: {
@@ -619,7 +652,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
 
                 // 2. 折れ線グラフ
-                const datasetConfigs = [
+                const ctxLine = document.getElementById('assetLineChart').getContext('2d');
+                const lineDatasetConfigs = [
                     { label: '総資産', data: historyData.total, color: totalAssetColor, hidden: false },
                     { label: '日本株', data: historyData.jp_stock, color: assetColors[0], hidden: true },
                     { label: '米国株', data: historyData.us_stock, color: assetColors[1], hidden: true },
@@ -629,37 +663,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     { label: '投資信託', data: historyData.investment_trust, color: assetColors[5], hidden: true },
                     { label: '保険', data: historyData.insurance, color: assetColors[6], hidden: true }
                 ];
-                
-                const lineDatasets = datasetConfigs.map(config => ({
-                    label: config.label,
-                    data: config.data,
-                    borderColor: config.color,
-                    backgroundColor: hexToRgba(config.color, 0.2),
-                    fill: true,
-                    tension: 0.4,
-                    borderWidth: 2,
-                    pointRadius: 1,
-                    pointHoverRadius: 5,
-                    hidden: config.hidden
+                const lineDatasets = lineDatasetConfigs.map(config => ({
+                    label: config.label, data: config.data, borderColor: config.color,
+                    backgroundColor: hexToRgba(config.color, 0.2), fill: true, tension: 0.4,
+                    borderWidth: 2, pointRadius: 1, pointHoverRadius: 5, hidden: config.hidden
                 }));
-
-                const ctxLine = document.getElementById('assetLineChart').getContext('2d');
                 myLineChart = new Chart(ctxLine, {
                     type: 'line',
-                    data: {
-                        labels: historyData.dates,
-                        datasets: lineDatasets
-                    },
+                    data: { labels: historyData.dates, datasets: lineDatasets },
                     options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
+                        responsive: true, maintainAspectRatio: false,
                         plugins: { 
-                            legend: { display: false },
-                            title: { display: true, text: '資産推移', font: { size: 16 } },
+                            legend: { display: false }, title: { display: true, text: '資産推移', font: { size: 16 } },
                             datalabels: { display: false },
                             tooltip: {
-                                mode: 'index',
-                                intersect: false,
+                                mode: 'index', intersect: false,
                                 callbacks: {
                                     label: (context) => ` ${context.dataset.label}: ${new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(context.parsed.y)}`
                                 }
@@ -680,37 +698,45 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 });
 
-                // ★★★ 変更点 ★★★
-                const lineToggles = document.querySelectorAll('.line-toggle');
+                // --- ★★★ コントロール設定（ここからがメインの変更箇所） ★★★ ---
 
-                // 色の濃さを更新する関数
-                const updateVisuals = () => {
-                    lineToggles.forEach(toggle => {
-                        // toggleの次にある要素が色付きの箱(span)
+                //【棒グラフ用の設定】
+                const barToggles = document.querySelectorAll('.bar-toggle');
+                const updateBarVisuals = () => {
+                    barToggles.forEach(toggle => {
                         const colorBox = toggle.nextElementSibling;
-                        if (colorBox) {
-                            colorBox.style.opacity = toggle.checked ? '1.0' : '0.4';
-                        }
+                        if (colorBox) colorBox.style.opacity = toggle.checked ? '1.0' : '0.4';
                     });
                 };
-
-                // 個別の項目（ラベル）がクリックされた時のイベントリスナー
-                document.querySelectorAll('.legend-controls .legend-item').forEach(item => {
-                    const toggle = item.querySelector('input[type="checkbox"]');
-                    if (!toggle) return;
-
-                    // ラベルクリックがチェックボックスの状態を変えた後、changeイベントが発火する
+                document.getElementById('toggle-all-bars').addEventListener('change', (e) => {
+                    const isChecked = e.target.checked;
+                    barToggles.forEach(toggle => {
+                        toggle.checked = isChecked;
+                        const index = toggle.getAttribute('data-dataset-index');
+                        myBarChart.getDatasetMeta(parseInt(index)).hidden = !isChecked;
+                    });
+                    myBarChart.update();
+                    updateBarVisuals();
+                });
+                barToggles.forEach(toggle => {
                     toggle.addEventListener('change', () => {
-                        if (toggle.classList.contains('line-toggle')) {
-                            const index = toggle.getAttribute('data-dataset-index');
-                            myLineChart.getDatasetMeta(parseInt(index)).hidden = !toggle.checked;
-                        }
-                        myLineChart.update();
-                        updateVisuals(); // 見た目を更新
+                        const index = toggle.getAttribute('data-dataset-index');
+                        myBarChart.getDatasetMeta(parseInt(index)).hidden = !toggle.checked;
+                        myBarChart.update();
+                        updateBarVisuals();
                     });
                 });
-                
-                // 「すべて選択」がクリックされた時のイベントリスナー
+                updateBarVisuals();
+
+
+                //【折れ線グラフ用の設定】
+                const lineToggles = document.querySelectorAll('.line-toggle');
+                const updateLineVisuals = () => {
+                    lineToggles.forEach(toggle => {
+                        const colorBox = toggle.nextElementSibling;
+                        if (colorBox) colorBox.style.opacity = toggle.checked ? '1.0' : '0.4';
+                    });
+                };
                 document.getElementById('toggle-all-lines').addEventListener('change', (e) => {
                     const isChecked = e.target.checked;
                     lineToggles.forEach(toggle => {
@@ -719,11 +745,17 @@ document.addEventListener('DOMContentLoaded', function() {
                         myLineChart.getDatasetMeta(parseInt(index)).hidden = !isChecked;
                     });
                     myLineChart.update();
-                    updateVisuals(); // 全ての見た目を更新
+                    updateLineVisuals();
                 });
-                
-                // 初期表示時の色の濃さを設定
-                updateVisuals();
+                lineToggles.forEach(toggle => {
+                    toggle.addEventListener('change', () => {
+                        const index = toggle.getAttribute('data-dataset-index');
+                        myLineChart.getDatasetMeta(parseInt(index)).hidden = !toggle.checked;
+                        myLineChart.update();
+                        updateLineVisuals();
+                    });
+                });
+                updateLineVisuals();
             }
         } catch (e) { console.error("History chart error:", e); }
     }
