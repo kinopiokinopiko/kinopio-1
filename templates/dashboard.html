@@ -100,15 +100,6 @@
         margin-left: 8px;
     }
 
-    .chart-card {
-        background: white;
-        border-radius: 16px;
-        padding: 20px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        min-height: 250px;
-        position: relative;
-    }
-    
     .profit-plus { color: #dc3545; }
     .profit-minus { color: #28a745; }
     
@@ -178,6 +169,52 @@
         font-size: 12px;
         opacity: 0.8;
     }
+
+    .chart-container-with-tabs {
+        background: white;
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        height: 450px;
+        margin-bottom: 24px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .tab-nav {
+        display: flex;
+        border-bottom: 1px solid #eee;
+        flex-shrink: 0;
+    }
+    .tab-btn {
+        padding: 10px 20px;
+        cursor: pointer;
+        background: none;
+        border: none;
+        font-size: 14px;
+        color: #666;
+        border-bottom: 3px solid transparent;
+        transition: all 0.2s ease;
+    }
+    .tab-btn.active {
+        color: #333;
+        font-weight: 600;
+        border-bottom-color: #457B9D;
+    }
+    .tab-content-wrapper {
+        flex-grow: 1;
+        position: relative;
+        padding-top: 16px;
+    }
+    .tab-content {
+        display: none;
+        width: 100%;
+        height: 100%;
+        position: absolute;
+    }
+    .tab-content.active {
+        display: block;
+    }
     
     @media (min-width: 768px) {
         .asset-grid {
@@ -218,24 +255,37 @@
     </a>
 </div>
 
-<div class="summary-grid">
-    <div class="total-card">
-        <div class="total-label">総資産</div>
-        <div class="total-amount">¥{{ "{:,.0f}".format(total_assets) }}</div>
-        {% set total_cost = (jp_total - jp_profit) + (us_total_jpy - us_profit_jpy) + (gold_total - gold_profit) + (crypto_total - crypto_profit) + (investment_trust_total - investment_trust_profit) + (insurance_total - insurance_profit) %}
-        {% set total_profit_rate = (total_profit / total_cost * 100) if total_cost > 0 else 0 %}
-        <div class="total-profit {% if total_profit >= 0 %}profit-plus{% else %}profit-minus{% endif %}">
-            {% if total_profit >= 0 %}+{% endif %}¥{{ "{:,.0f}".format(total_profit) }}
-            <span class="profit-percentage">({% if total_profit >= 0 %}+{% endif %}{{ "{:.2f}".format(total_profit_rate) }}%)</span>
-        </div>
-    </div>
-    <div class="chart-card">
-        <canvas id="assetPieChart"></canvas>
+<div class="total-card" style="margin-bottom: 24px;">
+    <div class="total-label">総資産</div>
+    <div class="total-amount">¥{{ "{:,.0f}".format(total_assets) }}</div>
+    {% set total_cost = (jp_total - jp_profit) + (us_total_jpy - us_profit_jpy) + (gold_total - gold_profit) + (crypto_total - crypto_profit) + (investment_trust_total - investment_trust_profit) + (insurance_total - insurance_profit) %}
+    {% set total_profit_rate = (total_profit / total_cost * 100) if total_cost > 0 else 0 %}
+    <div class="total-profit {% if total_profit >= 0 %}profit-plus{% else %}profit-minus{% endif %}">
+        {% if total_profit >= 0 %}+{% endif %}¥{{ "{:,.0f}".format(total_profit) }}
+        <span class="profit-percentage">({% if total_profit >= 0 %}+{% endif %}{{ "{:.2f}".format(total_profit_rate) }}%)</span>
     </div>
 </div>
 
-<div class="chart-card" style="margin-bottom: 24px; height: 400px;">
-    <canvas id="assetHistoryChart"></canvas>
+<div class="chart-container-with-tabs">
+    <div class="tab-nav">
+        <button class="tab-btn active" onclick="showTab('portfolio')">ポートフォリオ</button>
+        <button class="tab-btn" onclick="showTab('bar')">棒グラフ推移</button>
+        <button class="tab-btn" onclick="showTab('line')">折れ線グラフ推移</button>
+    </div>
+
+    <div class="tab-content-wrapper">
+        <div id="portfolio-content" class="tab-content active">
+            <canvas id="assetPieChart"></canvas>
+        </div>
+
+        <div id="bar-content" class="tab-content">
+            <canvas id="assetHistoryChart"></canvas>
+        </div>
+
+        <div id="line-content" class="tab-content">
+            <canvas id="assetLineChart"></canvas>
+        </div>
+    </div>
 </div>
 
 <div class="asset-grid">
@@ -331,6 +381,25 @@
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 
 <script>
+function showTab(tabName) {
+    // 全てのコンテンツを非表示にする
+    const contents = document.querySelectorAll('.tab-content');
+    contents.forEach(content => {
+        content.classList.remove('active');
+    });
+
+    // 全てのタブボタンのactiveクラスを削除
+    const buttons = document.querySelectorAll('.tab-btn');
+    buttons.forEach(button => {
+        button.classList.remove('active');
+    });
+
+    // クリックされたタブに対応するコンテンツを表示
+    document.getElementById(tabName + '-content').classList.add('active');
+    // クリックされたタブボタンにactiveクラスを追加
+    event.currentTarget.classList.add('active');
+}
+
 // ラベル表示用プラグインをChart.jsに登録
 Chart.register(ChartDataLabels);
 
@@ -338,155 +407,161 @@ document.addEventListener('DOMContentLoaded', function() {
     const chartDataJSON = '{{ chart_data | safe }}';
     const historyDataJSON = '{{ history_data | safe }}';
 
-    // 円グラフと棒グラフで共通の、新しい鮮やかな色設定
+    // グラフで共通のカラー設定
     const assetColors = [
-        '#E63946', // 日本株 (Vibrant Red)
-        '#457B9D', // 米国株 (Vibrant Blue)
-        '#F4A261', // 現金 (Vibrant Orange)
-        '#E9C46A', // 金 (Vibrant Yellow)
-        '#9B5DE5', // 暗号資産 (Vibrant Purple)
-        '#52B788', // 投資信託 (Vibrant Green)
-        '#F15BB5'  // 保険 (Vibrant Pink)
+        '#E63946', '#457B9D', '#F4A261', '#E9C46A', 
+        '#9B5DE5', '#52B788', '#F15BB5'
     ];
 
     // 資産ポートフォリオ円グラフ
     if (chartDataJSON) {
-        const chartData = JSON.parse(chartDataJSON);
-        
-        const filteredLabels = [];
-        const filteredValues = [];
-        const filteredColors = [];
-        chartData.values.forEach((value, index) => {
-            if (value > 0) {
-                filteredLabels.push(chartData.labels[index]);
-                filteredValues.push(value);
-                filteredColors.push(assetColors[index]);
-            }
-        });
+        try {
+            const chartData = JSON.parse(chartDataJSON);
+            const filteredLabels = [], filteredValues = [], filteredColors = [];
+            chartData.values.forEach((value, index) => {
+                if (value > 0) {
+                    filteredLabels.push(chartData.labels[index]);
+                    filteredValues.push(value);
+                    filteredColors.push(assetColors[index]);
+                }
+            });
 
-        if (filteredValues.length > 0) {
-            const ctxPie = document.getElementById('assetPieChart').getContext('2d');
-            new Chart(ctxPie, {
-                type: 'pie',
-                data: {
-                    labels: filteredLabels,
-                    datasets: [{
-                        data: filteredValues,
-                        backgroundColor: filteredColors,
-                        borderColor: '#fff',
-                        borderWidth: 2,
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        // 従来の凡例は非表示にする
-                        legend: {
-                            display: false
-                        },
-                        title: {
-                            display: true,
-                            text: '資産ポートフォリオ',
-                            font: { size: 16 }
-                        },
-                        // グラフ内にラベルを表示するための設定
-                        datalabels: {
-                            formatter: (value, context) => {
-                                const datapoints = context.chart.data.datasets[0].data;
-                                const total = datapoints.reduce((total, datapoint) => total + datapoint, 0);
-                                const percentage = (value / total) * 100;
-                                // 割合が小さすぎるラベルは非表示にして見やすくする
-                                if (percentage < 3) {
-                                    return '';
-                                }
-                                const label = context.chart.data.labels[context.dataIndex];
-                                return `${percentage.toFixed(2)}%\n${label}`;
+            if (filteredValues.length > 0) {
+                const ctxPie = document.getElementById('assetPieChart').getContext('2d');
+                new Chart(ctxPie, {
+                    type: 'pie',
+                    data: {
+                        labels: filteredLabels,
+                        datasets: [{ data: filteredValues, backgroundColor: filteredColors, borderColor: '#fff', borderWidth: 2 }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            title: { display: true, text: '資産ポートフォリオ', font: { size: 16 } },
+                            datalabels: {
+                                formatter: (value, context) => {
+                                    const total = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                                    const percentage = (value / total) * 100;
+                                    if (percentage < 3) return '';
+                                    const label = context.chart.data.labels[context.dataIndex];
+                                    return `${percentage.toFixed(1)}%\n${label}`;
+                                },
+                                color: '#fff', textAlign: 'center', font: { weight: 'bold', size: 12 },
+                                textShadowBlur: 6, textShadowColor: 'rgba(0, 0, 0, 0.5)'
                             },
-                            color: '#fff',
-                            textAlign: 'center',
-                            font: {
-                                weight: 'bold',
-                                size: 12,
-                            },
-                            // 文字に影を付けて読みやすくする
-                            textShadowBlur: 6,
-                            textShadowColor: 'rgba(0, 0, 0, 0.5)'
-                        },
-                        tooltip: {
-                             callbacks: {
-                                label: function(context) {
-                                    let label = context.label || '';
-                                    if (label) label += ': ';
-                                    const value = context.parsed;
-                                    label += new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(value);
-                                    return label;
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => ` ${context.label}: ${new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(context.parsed)}`
                                 }
                             }
                         }
                     }
-                }
-            });
-        }
+                });
+            }
+        } catch (e) { console.error("Pie chart error:", e); }
     }
 
-    // 資産推移グラフ（積み上げ棒グラフ）
+    // 資産推移グラフ(積み上げ棒グラフ & 折れ線グラフ)
     if (historyDataJSON) {
-        const historyData = JSON.parse(historyDataJSON);
-        if (historyData.dates && historyData.dates.length > 0) {
-            const ctxHistory = document.getElementById('assetHistoryChart').getContext('2d');
-            
-            // ★★★ 棒グラフを極限まで細くするための設定 ★★★
-            const barThicknessOptions = {
-                barPercentage: 0.2, // カテゴリ内の棒が占める割合（値を小さくして細くしました）
-                categoryPercentage: 0.5 // カテゴリ全体が占める割合（値を小さくして間隔を広げました）
-            };
-
-            new Chart(ctxHistory, {
-                type: 'bar',
-                data: {
-                    labels: historyData.dates,
-                    datasets: [
-                        { label: '日本株', data: historyData.jp_stock, backgroundColor: assetColors[0], ...barThicknessOptions },
-                        { label: '米国株', data: historyData.us_stock, backgroundColor: assetColors[1], ...barThicknessOptions },
-                        { label: '現金', data: historyData.cash, backgroundColor: assetColors[2], ...barThicknessOptions },
-                        { label: '金', data: historyData.gold, backgroundColor: assetColors[3], ...barThicknessOptions },
-                        { label: '暗号資産', data: historyData.crypto, backgroundColor: assetColors[4], ...barThicknessOptions },
-                        { label: '投資信託', data: historyData.investment_trust, backgroundColor: assetColors[5], ...barThicknessOptions },
-                        { label: '保険', data: historyData.insurance, backgroundColor: assetColors[6], ...barThicknessOptions }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        title: { display: true, text: '資産推移', font: { size: 16 } },
-                        tooltip: { 
-                            mode: 'nearest', 
-                            intersect: true 
-                        },
-                        legend: { position: 'bottom' },
-                        // 棒グラフではラベル表示プラグインを無効化
-                        datalabels: {
-                            display: false
-                        }
+        try {
+            const historyData = JSON.parse(historyDataJSON);
+            if (historyData.dates && historyData.dates.length > 0) {
+                
+                // 1. 積み上げ棒グラフ
+                const ctxHistoryBar = document.getElementById('assetHistoryChart').getContext('2d');
+                new Chart(ctxHistoryBar, {
+                    type: 'bar',
+                    data: {
+                        labels: historyData.dates,
+                        datasets: [
+                            { label: '日本株', data: historyData.jp_stock, backgroundColor: assetColors[0]},
+                            { label: '米国株', data: historyData.us_stock, backgroundColor: assetColors[1]},
+                            { label: '現金', data: historyData.cash, backgroundColor: assetColors[2]},
+                            { label: '金', data: historyData.gold, backgroundColor: assetColors[3]},
+                            { label: '暗号資産', data: historyData.crypto, backgroundColor: assetColors[4]},
+                            { label: '投資信託', data: historyData.investment_trust, backgroundColor: assetColors[5]},
+                            { label: '保険', data: historyData.insurance, backgroundColor: assetColors[6]}
+                        ]
                     },
-                    scales: {
-                        x: { stacked: true },
-                        y: {
-                            stacked: true,
-                            ticks: {
-                                callback: function(value) {
-                                    if (value >= 100000000) return '¥' + (value / 100000000).toFixed(1) + '億';
-                                    if (value >= 10000) return '¥' + (value / 10000).toLocaleString() + '万';
-                                    return '¥' + value.toLocaleString();
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: {
+                            title: { display: true, text: '資産推移 (棒グラフ)', font: { size: 16 } },
+                            tooltip: { mode: 'index', intersect: false },
+                            legend: { position: 'bottom' },
+                            datalabels: { display: false }
+                        },
+                        scales: {
+                            x: { stacked: true },
+                            y: {
+                                stacked: true,
+                                ticks: {
+                                    callback: (value) => {
+                                        if (value >= 1e8) return `¥${(value / 1e8).toFixed(1)}億`;
+                                        if (value >= 1e4) return `¥${(value / 1e4).toLocaleString()}万`;
+                                        return `¥${value.toLocaleString()}`;
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            });
-        }
+                });
+
+                // 2. 折れ線グラフ
+                const ctxLine = document.getElementById('assetLineChart').getContext('2d');
+                const totalHistory = historyData.total;
+                const dataPoints = totalHistory.map(v => parseFloat(v));
+
+                new Chart(ctxLine, {
+                    type: 'line',
+                    data: {
+                        labels: historyData.dates,
+                        datasets: [{
+                            label: '総資産',
+                            data: dataPoints,
+                            borderColor: '#4e79a7',
+                            backgroundColor: 'rgba(78,121,167,0.2)',
+                            fill: true,
+                            tension: 0.4,
+                            borderWidth: 2,
+                            pointRadius: 3,
+                            pointHoverRadius: 5
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { 
+                            legend: { display: false },
+                            title: { 
+                                display: true, 
+                                text: '総資産推移', 
+                                font: { size: 16 } 
+                            },
+                            datalabels: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => ` ${context.dataset.label}: ${new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(context.parsed.y)}`
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                ticks: {
+                                    callback: (value) => {
+                                        if (value >= 1e8) return `¥${(value/1e8).toFixed(1)}億`;
+                                        if (value >= 1e4) return `¥${(value/1e4).toFixed(0)}万`;
+                                        return `¥${value.toLocaleString()}`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        } catch (e) { console.error("History chart error:", e); }
     }
 });
 </script>
